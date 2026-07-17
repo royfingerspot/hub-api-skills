@@ -1,0 +1,4450 @@
+openapi: 3.1.0
+info:
+  title: Fingerspot HubAPI
+  version: 2.0.0
+  description: >
+    Async device command API. Every command endpoint responds 200 with an
+    acknowledgement immediately; the result is delivered later via a POST
+    to the device's registered webhook URL. Synchronous endpoints
+    (webhook-logs, attendance, webhook config) return data directly.
+servers:
+  - url: https://dev.int.api-new.fingerspot.io/api/external/
+security:
+  - BearerAuth: []
+tags:
+  - name: Device
+    description: Device info, time, reboot
+  - name: Users
+    description: User CRUD
+  - name: Credentials
+    description: Fingerprint, card, face credential management
+  - name: Timezone
+    description: Device timezone configuration
+  - name: Door
+    description: Door control and status
+  - name: Valid Date
+    description: User validity period
+  - name: Capture
+    description: Live fingerprint and card capture
+  - name: Attendance
+    description: Attendance log queries
+  - name: Webhook Logs
+    description: Webhook delivery logs
+  - name: Webhook Config
+    description: Per-device webhook URL configuration
+  - name: Devices (DEV ONLY)
+    description: Device registration management
+
+paths:
+
+  # ==========================================================================
+  # 1. GET /v1/{cloud_id} — Device Info
+  # ==========================================================================
+  /v1/{cloud_id}:
+    parameters:
+      - $ref: '#/components/parameters/CloudIdParam'
+      - $ref: '#/components/parameters/ReferenceIdHeader'
+      - $ref: '#/components/parameters/WebhookUrlHeader'
+    get:
+      tags: [Device]
+      summary: Get device information
+      description: >
+        Synchronous endpoint — returns device information directly.
+      operationId: getDevice
+      x-supported-brands: [vivo, vida, revo, vega, zkteco]
+      responses:
+        '200':
+          description: Device information.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceInfoData'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Device not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # ==========================================================================
+  # 1.5 GET /v1/{cloud_id}/activity — Device Activity (sync)
+  # ==========================================================================
+  /v1/{cloud_id}/activity:
+    parameters:
+      - $ref: '#/components/parameters/CloudIdParam'
+    get:
+      tags: [Device]
+      summary: Get device connectivity status
+      description: >
+        Synchronous endpoint — returns the device's current connectivity
+        status and last-seen timestamp directly. No webhook callback.
+      operationId: getDeviceActivity
+      x-supported-brands: [vivo, vida, revo, vega, zkteco]
+      responses:
+        '200':
+          description: Device activity status.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceActivityResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Device not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # ==========================================================================
+  # 2. GET /v1/{cloud_id}/attendance — Attendance Logs
+  # ==========================================================================
+  /v1/{cloud_id}/attendance:
+    parameters:
+      - $ref: '#/components/parameters/CloudIdParam'
+    get:
+      tags: [Attendance]
+      summary: Get attendance logs
+      description: >
+        Synchronous endpoint — returns attendance logs directly from local database.
+      operationId: getAttendance
+      x-supported-brands: [vivo, vida, revo, vega, zkteco]
+      parameters:
+        - name: startDate
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+          description: Start date (YYYY-MM-DD).
+        - name: endDate
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+          description: End date (YYYY-MM-DD).
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 100
+      responses:
+        '200':
+          description: Attendance logs.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttendanceData'
+        '400':
+          description: Invalid query parameters.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Device not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # ==========================================================================
+  # 3. GET /v1/{cloud_id}/users — Get All Users
+  # ==========================================================================
+  /v1/{cloud_id}/users:
+    parameters:
+      - $ref: '#/components/parameters/CloudIdParam'
+      - $ref: '#/components/parameters/ReferenceIdHeader'
+      - $ref: '#/components/parameters/WebhookUrlHeader'
+    get:
+      tags: [Users]
+      summary: Get all users
+      operationId: getAllUsers
+      x-supported-brands: [vida, vivo]
+      responses:
+        '200':
+          description: Command queued. Result sent to webhook callback.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AckResponse'
+        '400':
+          description: Invalid request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Device not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      callbacks:
+        deviceWebhook:
+          '{$request.path#/cloud_id}':
+            post:
+              summary: All users result
+              description: Posted to the device's registered webhook URL.
+              requestBody:
+                required: true
+                content:
+                  application/json:
+                    schema:
+                      oneOf:
+                        - allOf:
+                            - type: object
+                              required: [referenceId, status, commandType, data]
+                              properties:
+                                referenceId:
+                                  type: string
+                                status:
+                                  type: string
+                                  enum: [success]
+                                commandType:
+                                  type: string
+                                  description: >
+                                    The command type that was executed (e.g. "getUser", "setUser",
+                                    "setTime", "reboot", etc.).
+                            - type: object
+                              required: [data]
+                              properties:
+                                data:
+                                  type: array
+                                  items:
+                                    $ref: '#/components/schemas/UserInfo'
+                        - $ref: '#/components/schemas/WebhookFailed'
+              responses:
+                '200':
+                  description: Webhook acknowledged.
+                '4XX':
+                  description: Error (retried up to 5 times).
+
+    # ========================================================================
+    # 4. POST /v1/{cloud_id}/users — Create/Update User
+    # ========================================================================
+    post:
+      tags: [Users]
+      summary: Create or update a user
+      description: >
+        Sets user profile and all credentials in a single command.
+        Creates the user if they don't exist, updates if they do.
+      operationId: setUser
+      x-supported-brands: [vivo, vida, revo, vega, zkteco]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetUserRequest'
+      responses:
+        '200':
+          description: Command queued. Result sent to webhook callback.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AckResponse'
+        '400':
+          description: Invalid request body.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Device not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      callbacks:
+        deviceWebhook:
+          '{$request.path#/cloud_id}':
+            post:
+              summary: Set user result
+              description: Posted to the device's registered webhook URL.
+              requestBody:
+                required: true
+                content:
+                  application/json:
+                    schema:
+                      oneOf:
+                        - allOf:
+                            - type: object
+                              required: [referenceId, status, commandType, data]
+                              properties:
+                                referenceId:
+                                  type: string
+                                status:
+                                  type: string
+                                  enum: [success]
+                                commandType:
+                                  type: string
+                                  description: >
+                                    The command type that was executed (e.g. "getUser", "setUser",
+                                    "setTime", "reboot", etc.).
+                            - type: object
+                              required: [data]
+                              properties:
+                                data:
+                                  $ref: '#/components/schemas/OperationResult'
+                        - $ref: '#/components/schemas/WebhookFailed'
+              responses:
+                '200':
+                  description: Webhook acknowledged.
+                '4XX':
+                  description: Error (retried up to 5 times).
+
+  # ==========================================================================
+  # 4.5 GET /v1/{cloud_id}/user-ids — Get All User IDs (Lightweight)
+  # ==========================================================================
+  /v1/{cloud_id}/user-ids:
+    parameters:
+      - $ref: '#/components/parameters/CloudIdParam'
+      - $ref: '#/components/parameters/ReferenceIdHeader'
+      - $ref: '#/components/parameters/WebhookUrlHeader'
+    get:
+      tags: [Users]
+      summary: Get all user IDs (lightweight)
+      description: >
+        Returns only user IDs/PINs and count, without full user data.
+        More efficient than getAllUsers for large user lists.
+      operationId: getAllUserIds
+      x-supported-brands: [revo, vega, vivo, vida, zkteco]
+      responses:
+        '200':
+          description: Command queued. Result sent to webhook callback.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AckResponse'
+        '400':
+          description: Invalid request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Device not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      callbacks:
+        deviceWebhook:
+          '{$request.path#/cloud_id}':
+            post:
+              summary: All user IDs result
+              description: Posted to the device's registered webhook URL.
+              requestBody:
+                required: true
+                content:
+                  application/json:
+                    schema:
+                      oneOf:
+                        - allOf:
+                            - type: object
+                              required: [referenceId, status, commandType, data]
+                              properties:
+                                referenceId:
+                                  type: string
+                                status:
+                                  type: string
+                                  enum: [success]
+                                commandType:
+                                  type: string
+                                  description: >
+                                    The command type that was executed (e.g. "getUser", "setUser",
+                                    "setTime", "reboot", etc.).
+                            - type: object
+                              required: [data]
+                              properties:
+                                data:
+                                  $ref: '#/components/schemas/GetAllUserIdsResult'
+                        - $ref: '#/components/schemas/WebhookFailed'
+              responses:
+                '200':
+                  description: Webhook acknowledged.
+                '4XX':
+                  description: Error (retried up to 5 times).
+
+  # ==========================================================================
+  # 5. GET /v1/{cloud_id}/users/{id} — Get User by ID
+  # ==========================================================================
+  /v1/{cloud_id}/users/{id}:
+    parameters:
+      - $ref: '#/components/parameters/CloudIdParam'
+      - $ref: '#/components/parameters/UserIdParam'
+      - $ref: '#/components/parameters/ReferenceIdHeader'
+      - $ref: '#/components/parameters/WebhookUrlHeader'
+    get:
+      tags: [Users]
+      summary: Get user by employee number
+      operationId: getUser
+      x-supported-brands: [vida, vivo, zkteco]
+      responses:
+        '200':
+          description: Command queued. Result sent to webhook callback.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AckResponse'
+        '400':
+          description: Invalid request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Device not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      callbacks:
+        deviceWebhook:
+          '{$request.path#/cloud_id}':
+            post:
+              summary: Get user result
+              description: Posted to the device's registered webhook URL.
+              requestBody:
+                required: true
+                content:
+                  application/json:
+                    schema:
+                      oneOf:
+                        - allOf:
+                            - type: object
+                              required: [referenceId, status, commandType, data]
+                              properties:
+                                referenceId:
+                                  type: string
+                                status:
+                                  type: string
+                                  enum: [success]
+                                commandType:
+                                  type: string
+                                  description: >
+                                    The command type that was executed (e.g. "getUser", "setUser",
+                                    "setTime", "reboot", etc.).
+                            - type: object
+                              required: [data]
+                              properties:
+                                data:
+                                  $ref: '#/components/schemas/UserDetail'
+                        - $ref: '#/components/schemas/WebhookFailed'
+              responses:
+                '200':
+                  description: Webhook acknowledged.
+                '4XX':
+                  description: Error (retried up to 5 times).
+
+    # ========================================================================
+    # 6. DELETE /v1/{cloud_id}/users/{id} — Delete User
+    # ========================================================================
+    delete:
+      tags: [Users]
+      summary: Delete a user and all credentials
+      operationId: deleteUser
+      x-supported-brands: [vida, vivo, zkteco]
+      responses:
+        '200':
+          description: Command queued. Result sent to webhook callback.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AckResponse'
+        '400':
+          description: Invalid request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Device not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      callbacks:
+        deviceWebhook:
+          '{$request.path#/cloud_id}':
+            post:
+              summary: Delete user result
+              description: Posted to the device's registered webhook URL.
+              requestBody:
+                required: true
+                content:
+                  application/json:
+                    schema:
+                      oneOf:
+                        - allOf:
+                            - type: object
+                              required: [referenceId, status, commandType, data]
+                              properties:
+                                referenceId:
+                                  type: string
+                                status:
+                                  type: string
+                                  enum: [success]
+                                commandType:
+                                  type: string
+                                  description: >
+                                    The command type that was executed (e.g. "getUser", "setUser",
+                                    "setTime", "reboot", etc.).
+                            - type: object
+                              required: [data]
+                              properties:
+                                data:
+                                  $ref: '#/components/schemas/OperationResult'
+                        - $ref: '#/components/schemas/WebhookFailed'
+              responses:
+                '200':
+                  description: Webhook acknowledged.
+                '4XX':
+                  description: Error (retried up to 5 times).
+
+  # ==========================================================================
+  # 7. PUT /v1/{cloud_id}/time — Set Device Time
+  # ==========================================================================
+  /v1/{cloud_id}/time:
+    parameters:
+      - $ref: '#/components/parameters/CloudIdParam'
+      - $ref: '#/components/parameters/ReferenceIdHeader'
+      - $ref: '#/components/parameters/WebhookUrlHeader'
+    put:
+      tags: [Device]
+      summary: Set device time
+      description: >
+        Sets the device's date/time and/or timezone. Accepts IANA timezone
+        names (e.g. "Asia/Jakarta") or ISO 8601 offsets (+/-HH:MM).
+      operationId: setTime
+      x-supported-brands: [vivo, vida, revo, vega, zkteco]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              minProperties: 1
+              properties:
+                dateTime:
+                  type: string
+                  description: ISO 8601 datetime (YYYY-MM-DDTHH:MM:SS).
+                timezone:
+                  type: string
+                  description: IANA timezone name or ISO 8601 offset (+/-HH:MM).
+                mode:
+                  type: string
+                  enum: [ntp, manual]
+      responses:
+        '200':
+          description: Command queued. Result sent to webhook callback.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AckResponse'
+        '400':
+          description: Invalid request body.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Device not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      callbacks:
+        deviceWebhook:
+          '{$request.path#/cloud_id}':
+            post:
+              summary: Set time result
+              description: Posted to the device's registered webhook URL.
+              requestBody:
+                required: true
+                content:
+                  application/json:
+                    schema:
+                      oneOf:
+                        - allOf:
+                            - type: object
+                              required: [referenceId, status, commandType, data]
+                              properties:
+                                referenceId:
+                                  type: string
+                                status:
+                                  type: string
+                                  enum: [success]
+                                commandType:
+                                  type: string
+                                  description: >
+                                    The command type that was executed (e.g. "getUser", "setUser",
+                                    "setTime", "reboot", etc.).
+                            - type: object
+                              required: [data]
+                              properties:
+                                data:
+                                  $ref: '#/components/schemas/OperationResult'
+                        - $ref: '#/components/schemas/WebhookFailed'
+              responses:
+                '200':
+                  description: Webhook acknowledged.
+                '4XX':
+                  description: Error (retried up to 5 times).
+
+  # ==========================================================================
+  # 8. POST /v1/{cloud_id}/reboot — Reboot Device
+  # ==========================================================================
+  /v1/{cloud_id}/reboot:
+    parameters:
+      - $ref: '#/components/parameters/CloudIdParam'
+      - $ref: '#/components/parameters/ReferenceIdHeader'
+      - $ref: '#/components/parameters/WebhookUrlHeader'
+    post:
+      tags: [Device]
+      summary: Reboot device
+      operationId: reboot
+      x-supported-brands: [vida]
+      responses:
+        '200':
+          description: Command queued. Result sent to webhook callback.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AckResponse'
+        '400':
+          description: Invalid request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Device not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      callbacks:
+        deviceWebhook:
+          '{$request.path#/cloud_id}':
+            post:
+              summary: Reboot result
+              description: Posted to the device's registered webhook URL.
+              requestBody:
+                required: true
+                content:
+                  application/json:
+                    schema:
+                      oneOf:
+                        - allOf:
+                            - type: object
+                              required: [referenceId, status, commandType, data]
+                              properties:
+                                referenceId:
+                                  type: string
+                                status:
+                                  type: string
+                                  enum: [success]
+                                commandType:
+                                  type: string
+                                  description: >
+                                    The command type that was executed (e.g. "getUser", "setUser",
+                                    "setTime", "reboot", etc.).
+                            - type: object
+                              required: [data]
+                              properties:
+                                data:
+                                  type: object
+                                  required: [message]
+                                  properties:
+                                    message:
+                                      type: string
+                        - $ref: '#/components/schemas/WebhookFailed'
+              responses:
+                '200':
+                  description: Webhook acknowledged.
+                '4XX':
+                  description: Error (retried up to 5 times).
+
+  # ==========================================================================
+  # 9. POST /v1/{cloud_id}/capture/finger — Capture Finger
+  # ==========================================================================
+  /v1/{cloud_id}/capture/finger:
+    parameters:
+      - $ref: '#/components/parameters/CloudIdParam'
+      - $ref: '#/components/parameters/ReferenceIdHeader'
+      - $ref: '#/components/parameters/WebhookUrlHeader'
+    post:
+      tags: [Capture]
+      summary: Live fingerprint capture
+      description: >
+        Triggers the device to capture a fingerprint. Returns 400 with
+        ERR_UNSUPPORTED if the device does not support this capability.
+      operationId: captureFinger
+      x-supported-brands: [vida, vivo, zkteco]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [fingerNo]
+              properties:
+                fingerNo:
+                  type: integer
+                  minimum: 0
+                  maximum: 10
+                employeeNo:
+                  type: string
+      responses:
+        '200':
+          description: Command queued. Result sent to webhook callback.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AckResponse'
+        '400':
+          description: Invalid request body or unsupported operation.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Device not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      callbacks:
+        deviceWebhook:
+          '{$request.path#/cloud_id}':
+            post:
+              summary: Capture finger result
+              description: Posted to the device's registered webhook URL.
+              requestBody:
+                required: true
+                content:
+                  application/json:
+                    schema:
+                      oneOf:
+                        - allOf:
+                            - type: object
+                              required: [referenceId, status, commandType, data]
+                              properties:
+                                referenceId:
+                                  type: string
+                                status:
+                                  type: string
+                                  enum: [success]
+                                commandType:
+                                  type: string
+                                  description: >
+                                    The command type that was executed (e.g. "getUser", "setUser",
+                                    "setTime", "reboot", etc.).
+                            - type: object
+                              required: [data]
+                              properties:
+                                data:
+                                  type: object
+                                  required: [fingerData, fingerNo, fingerPrintQuality]
+                                  properties:
+                                    fingerData:
+                                      type: string
+                                    fingerNo:
+                                      type: integer
+                                    fingerPrintQuality:
+                                      type: integer
+                                      minimum: 0
+                                      maximum: 100
+                                    setResult:
+                                      type: object
+                                      nullable: true
+                                      description: Set result when employeeNo is provided (Vivo auto-set)
+                                      properties:
+                                        success:
+                                          type: boolean
+                                        message:
+                                          type: string
+                        - $ref: '#/components/schemas/WebhookFailed'
+              responses:
+                '200':
+                  description: Webhook acknowledged.
+                '4XX':
+                  description: Error (retried up to 5 times).
+
+  # ==========================================================================
+  # 10. POST /v1/{cloud_id}/capture/card — Capture Card
+  # ==========================================================================
+  /v1/{cloud_id}/capture/card:
+    parameters:
+      - $ref: '#/components/parameters/CloudIdParam'
+      - $ref: '#/components/parameters/ReferenceIdHeader'
+      - $ref: '#/components/parameters/WebhookUrlHeader'
+    post:
+      tags: [Capture]
+      summary: Live card capture
+      description: >
+        Triggers the device to capture a card number. Returns 400 with
+        ERR_UNSUPPORTED if the device does not support this capability.
+      operationId: captureCard
+      x-supported-brands: [vida, vivo]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                employeeNo:
+                  type: string
+                  description: Optional. Triggers auto-set when provided (Vivo only).
+      responses:
+        '200':
+          description: Command queued. Result sent to webhook callback.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AckResponse'
+        '400':
+          description: Invalid request or unsupported operation.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Device not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      callbacks:
+        deviceWebhook:
+          '{$request.path#/cloud_id}':
+            post:
+              summary: Capture card result
+              description: Posted to the device's registered webhook URL.
+              requestBody:
+                required: true
+                content:
+                  application/json:
+                    schema:
+                      oneOf:
+                        - allOf:
+                            - type: object
+                              required: [referenceId, status, commandType, data]
+                              properties:
+                                referenceId:
+                                  type: string
+                                status:
+                                  type: string
+                                  enum: [success]
+                                commandType:
+                                  type: string
+                                  description: >
+                                    The command type that was executed (e.g. "getUser", "setUser",
+                                    "setTime", "reboot", etc.).
+                            - type: object
+                              required: [data]
+                              properties:
+                                data:
+                                  type: object
+                                  required: [cardNo]
+                                  properties:
+                                    cardNo:
+                                      type: string
+                                    setResult:
+                                      type: object
+                                      nullable: true
+                                      description: Set result when employeeNo is provided (Vivo auto-set)
+                                      properties:
+                                        success:
+                                          type: boolean
+                                        message:
+                                          type: string
+                        - $ref: '#/components/schemas/WebhookFailed'
+              responses:
+                '200':
+                  description: Webhook acknowledged.
+                '4XX':
+                  description: Error (retried up to 5 times).
+
+  # ==========================================================================
+  # 11. GET /v1/{cloud_id}/webhook-logs — Webhook Logs
+  # ==========================================================================
+  /v1/{cloud_id}/webhook-logs:
+    parameters:
+      - $ref: '#/components/parameters/CloudIdParam'
+      - $ref: '#/components/parameters/ReferenceIdHeader'
+    get:
+      tags: [Webhook Logs]
+      summary: Get webhook delivery logs
+      description: >
+        Synchronous endpoint — returns webhook delivery log entries directly.
+        No acknowledgement or callback webhook.
+      operationId: getWebhookLogs
+      x-supported-brands: [vivo, vida, revo, vega, zkteco]
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [pending, success, failed]
+          description: Filter by webhook delivery status.
+        - name: startDate
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+          description: Filter logs created on or after this date (YYYY-MM-DD).
+        - name: endDate
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+          description: Filter logs created on or before this date (YYYY-MM-DD).
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+      responses:
+        '200':
+          description: Webhook log entries.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookLogsResponse'
+        '400':
+          description: Invalid query parameters.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # ==========================================================================
+  # 11.5 POST /v1/{cloud_id}/webhook-logs/{id}/resend — Resend Webhook
+  # ==========================================================================
+  /v1/{cloud_id}/webhook-logs/{id}/resend:
+    parameters:
+      - $ref: '#/components/parameters/CloudIdParam'
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+        description: The webhook log ID to resend.
+    post:
+      tags: [Webhook Logs]
+      summary: Resend a webhook
+      description: >
+        Synchronous endpoint — queues a new webhook delivery using the
+        request payload and URL from an existing webhook log. Returns
+        immediately with the new log ID. Delivery happens asynchronously.
+        No request body needed.
+      operationId: resendWebhook
+      x-supported-brands: [vivo, vida, revo, vega, zkteco]
+      responses:
+        '200':
+          description: Webhook resend queued.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookResendResponse'
+        '400':
+          description: Invalid webhook log ID or log has no payload/URL.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Webhook log not found or cloud ID mismatch.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # ==========================================================================
+  # 13. DELETE /v1/{cloud_id}/users/{id}/card/{cardNo}
+  # ==========================================================================
+  /v1/{cloud_id}/users/{id}/card/{cardNo}:
+    parameters:
+      - $ref: '#/components/parameters/CloudIdParam'
+      - $ref: '#/components/parameters/UserIdParam'
+      - $ref: '#/components/parameters/ReferenceIdHeader'
+      - $ref: '#/components/parameters/WebhookUrlHeader'
+      - name: cardNo
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Card number to delete.
+    delete:
+      tags: [Credentials]
+      summary: Delete a single card
+      operationId: deleteUserCard
+      x-supported-brands: [vida, vivo, zkteco]
+      responses:
+        '200':
+          description: Command queued. Result sent to webhook callback.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AckResponse'
+        '400':
+          description: Invalid request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Device not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      callbacks:
+        deviceWebhook:
+          '{$request.path#/cloud_id}':
+            post:
+              summary: Delete card result
+              description: Posted to the device's registered webhook URL.
+              requestBody:
+                required: true
+                content:
+                  application/json:
+                    schema:
+                      oneOf:
+                        - allOf:
+                            - type: object
+                              required: [referenceId, status, commandType, data]
+                              properties:
+                                referenceId:
+                                  type: string
+                                status:
+                                  type: string
+                                  enum: [success]
+                                commandType:
+                                  type: string
+                                  description: >
+                                    The command type that was executed (e.g. "getUser", "setUser",
+                                    "setTime", "reboot", etc.).
+                            - type: object
+                              required: [data]
+                              properties:
+                                data:
+                                  $ref: '#/components/schemas/OperationResult'
+                        - $ref: '#/components/schemas/WebhookFailed'
+              responses:
+                '200':
+                  description: Webhook acknowledged.
+                '4XX':
+                  description: Error (retried up to 5 times).
+
+  # ==========================================================================
+  # 14b. GET /v1/{cloud_id}/users/{id}/password — Get User Password
+  # ==========================================================================
+  /v1/{cloud_id}/users/{id}/password:
+    parameters:
+      - $ref: '#/components/parameters/CloudIdParam'
+      - $ref: '#/components/parameters/UserIdParam'
+      - $ref: '#/components/parameters/ReferenceIdHeader'
+      - $ref: '#/components/parameters/WebhookUrlHeader'
+    get:
+      tags: [Credentials]
+      summary: Get user password
+      operationId: getUserPassword
+      x-supported-brands: [vida, vivo, zkteco]
+      responses:
+        '200':
+          description: Command queued. Result sent to webhook callback.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AckResponse'
+        '400':
+          description: Invalid request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Device not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      callbacks:
+        deviceWebhook:
+          '{$request.path#/cloud_id}':
+            post:
+              summary: Get password result
+              description: Posted to the device's registered webhook URL.
+              requestBody:
+                required: true
+                content:
+                  application/json:
+                    schema:
+                      oneOf:
+                        - allOf:
+                            - type: object
+                              required: [referenceId, status, commandType, data]
+                              properties:
+                                referenceId:
+                                  type: string
+                                status:
+                                  type: string
+                                  enum: [success]
+                                commandType:
+                                  type: string
+                                  description: >
+                                    The command type that was executed (e.g. "getUser", "setUser",
+                                    "setTime", "reboot", etc.).
+                            - type: object
+                              required: [data]
+                              properties:
+                                data:
+                                  $ref: '#/components/schemas/GetUserPasswordResponse'
+                        - $ref: '#/components/schemas/WebhookFailed'
+              responses:
+                '200':
+                  description: Webhook acknowledged.
+                '4XX':
+                  description: Error (retried up to 5 times).
+    put:
+      tags: [Credentials]
+      summary: Set user password
+      operationId: setUserPassword
+      x-supported-brands: [vida, vivo, zkteco]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetUserPasswordRequest'
+      responses:
+        '200':
+          description: Command queued. Result sent to webhook callback.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AckResponse'
+        '400':
+          description: Invalid request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Device not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      callbacks:
+        deviceWebhook:
+          '{$request.path#/cloud_id}':
+            post:
+              summary: Set password result
+              description: Posted to the device's registered webhook URL.
+              requestBody:
+                required: true
+                content:
+                  application/json:
+                    schema:
+                      oneOf:
+                        - allOf:
+                            - type: object
+                              required: [referenceId, status, commandType, data]
+                              properties:
+                                referenceId:
+                                  type: string
+                                status:
+                                  type: string
+                                  enum: [success]
+                                commandType:
+                                  type: string
+                                  description: >
+                                    The command type that was executed (e.g. "getUser", "setUser",
+                                    "setTime", "reboot", etc.).
+                            - type: object
+                              required: [data]
+                              properties:
+                                data:
+                                  $ref: '#/components/schemas/OperationResult'
+                        - $ref: '#/components/schemas/WebhookFailed'
+              responses:
+                '200':
+                  description: Webhook acknowledged.
+                '4XX':
+                  description: Error (retried up to 5 times).
+
+  # ==========================================================================
+  # 14c. GET/PUT /v1/{cloud_id}/users/{id}/card — Get/Set User Card
+  # ==========================================================================
+  /v1/{cloud_id}/users/{id}/card:
+    parameters:
+      - $ref: '#/components/parameters/CloudIdParam'
+      - $ref: '#/components/parameters/UserIdParam'
+      - $ref: '#/components/parameters/ReferenceIdHeader'
+      - $ref: '#/components/parameters/WebhookUrlHeader'
+    get:
+      tags: [Credentials]
+      summary: Get user card
+      operationId: getUserCard
+      x-supported-brands: [vida, vivo, zkteco]
+      responses:
+        '200':
+          description: Command queued. Result sent to webhook callback.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AckResponse'
+        '400':
+          description: Invalid request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Device not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      callbacks:
+        deviceWebhook:
+          '{$request.path#/cloud_id}':
+            post:
+              summary: Get card result
+              description: Posted to the device's registered webhook URL.
+              requestBody:
+                required: true
+                content:
+                  application/json:
+                    schema:
+                      oneOf:
+                        - allOf:
+                            - type: object
+                              required: [referenceId, status, commandType, data]
+                              properties:
+                                referenceId:
+                                  type: string
+                                status:
+                                  type: string
+                                  enum: [success]
+                                commandType:
+                                  type: string
+                                  description: >
+                                    The command type that was executed (e.g. "getUser", "setUser",
+                                    "setTime", "reboot", etc.).
+                            - type: object
+                              required: [data]
+                              properties:
+                                data:
+                                  $ref: '#/components/schemas/GetUserCardResponse'
+                        - $ref: '#/components/schemas/WebhookFailed'
+              responses:
+                '200':
+                  description: Webhook acknowledged.
+                '4XX':
+                  description: Error (retried up to 5 times).
+    put:
+      tags: [Credentials]
+      summary: Set user card
+      operationId: setUserCard
+      x-supported-brands: [vida, vivo, zkteco]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetUserCardRequest'
+      responses:
+        '200':
+          description: Command queued. Result sent to webhook callback.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AckResponse'
+        '400':
+          description: Invalid request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Device not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      callbacks:
+        deviceWebhook:
+          '{$request.path#/cloud_id}':
+            post:
+              summary: Set card result
+              description: Posted to the device's registered webhook URL.
+              requestBody:
+                required: true
+                content:
+                  application/json:
+                    schema:
+                      oneOf:
+                        - allOf:
+                            - type: object
+                              required: [referenceId, status, commandType, data]
+                              properties:
+                                referenceId:
+                                  type: string
+                                status:
+                                  type: string
+                                  enum: [success]
+                                commandType:
+                                  type: string
+                                  description: >
+                                    The command type that was executed (e.g. "getUser", "setUser",
+                                    "setTime", "reboot", etc.).
+                            - type: object
+                              required: [data]
+                              properties:
+                                data:
+                                  $ref: '#/components/schemas/OperationResult'
+                        - $ref: '#/components/schemas/WebhookFailed'
+              responses:
+                '200':
+                  description: Webhook acknowledged.
+                '4XX':
+                  description: Error (retried up to 5 times).
+
+  # ==========================================================================
+  # 14d. QR Code Management — 4 base + 3 wrapper commands
+  # ==========================================================================
+
+  # Base endpoint: List all QR codes on device
+  /v1/{cloud_id}/qrcode:
+    parameters:
+      - $ref: '#/components/parameters/CloudIdParam'
+      - $ref: '#/components/parameters/ReferenceIdHeader'
+      - $ref: '#/components/parameters/WebhookUrlHeader'
+    get:
+      tags: [Credentials]
+      summary: Get all QR codes
+      operationId: getAllQRs
+      x-supported-brands: [vida]
+      responses:
+        '200':
+          description: Command queued. Result sent to webhook callback.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AckResponse'
+        '400':
+          description: Invalid request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Device not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # Base endpoint: Get/delete QR code by recno
+  /v1/{cloud_id}/qrcode/{recno}:
+    parameters:
+      - $ref: '#/components/parameters/CloudIdParam'
+      - name: recno
+        in: path
+        required: true
+        schema:
+          type: string
+        description: QR code record number
+      - $ref: '#/components/parameters/ReferenceIdHeader'
+      - $ref: '#/components/parameters/WebhookUrlHeader'
+    get:
+      tags: [Credentials]
+      summary: Get QR code by recno
+      operationId: getQR
+      x-supported-brands: [vida]
+      responses:
+        '200':
+          description: Command queued. Result sent to webhook callback.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AckResponse'
+        '400':
+          description: Invalid request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Device or QR code not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      tags: [Credentials]
+      summary: Delete QR code by recno
+      operationId: deleteQR
+      x-supported-brands: [vida]
+      responses:
+        '200':
+          description: Command queued. Result sent to webhook callback.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AckResponse'
+        '400':
+          description: Invalid request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Device or QR code not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # User QR endpoints (wrapper commands)
+  /v1/{cloud_id}/users/{id}/qrcode:
+    parameters:
+      - $ref: '#/components/parameters/CloudIdParam'
+      - $ref: '#/components/parameters/UserIdParam'
+      - $ref: '#/components/parameters/ReferenceIdHeader'
+      - $ref: '#/components/parameters/WebhookUrlHeader'
+    get:
+      tags: [Credentials]
+      summary: Get all QR codes for user
+      operationId: getUserAllQRs
+      x-supported-brands: [vida]
+      responses:
+        '200':
+          description: Command queued. Result sent to webhook callback.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AckResponse'
+        '400':
+          description: Invalid request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Device not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    post:
+      tags: [Credentials]
+      summary: Add QR code for user
+      operationId: addUserQR
+      x-supported-brands: [vida]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddUserQRRequest'
+      responses:
+        '200':
+          description: Command queued. Result sent to webhook callback.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AckResponse'
+        '400':
+          description: Invalid request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Device not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    put:
+      tags: [Credentials]
+      summary: Replace user QR code (revoke all, add new)
+      operationId: setUserQR
+      x-supported-brands: [vida]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddUserQRRequest'
+      responses:
+        '200':
+          description: Command queued. Result sent to webhook callback.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AckResponse'
+        '400':
+          description: Invalid request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Device not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      tags: [Credentials]
+      summary: Revoke all QR codes for user
+      operationId: revokeUserQR
+      x-supported-brands: [vida]
+      responses:
+        '200':
+          description: Command queued. Result sent to webhook callback.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AckResponse'
+        '400':
+          description: Invalid request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Device not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # ==========================================================================
+  # 14e. GET/PUT/DELETE /v1/{cloud_id}/users/{id}/finger — Finger (all/specific)
+  # ==========================================================================
+  /v1/{cloud_id}/users/{id}/finger:
+    parameters:
+      - $ref: '#/components/parameters/CloudIdParam'
+      - $ref: '#/components/parameters/UserIdParam'
+      - $ref: '#/components/parameters/ReferenceIdHeader'
+      - $ref: '#/components/parameters/WebhookUrlHeader'
+    get:
+      tags: [Credentials]
+      summary: Get all user fingerprints
+      operationId: getUserAllFinger
+      x-supported-brands: [vida, vivo, zkteco]
+      responses:
+        '200':
+          description: Command queued. Result sent to webhook callback.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AckResponse'
+        '400':
+          description: Invalid request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Device not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      callbacks:
+        deviceWebhook:
+          '{$request.path#/cloud_id}':
+            post:
+              summary: Get all fingerprints result
+              description: Posted to the device's registered webhook URL.
+              requestBody:
+                required: true
+                content:
+                  application/json:
+                    schema:
+                      oneOf:
+                        - allOf:
+                            - type: object
+                              required: [referenceId, status, commandType, data]
+                              properties:
+                                referenceId:
+                                  type: string
+                                status:
+                                  type: string
+                                  enum: [success]
+                                commandType:
+                                  type: string
+                                  description: >
+                                    The command type that was executed (e.g. "getUser", "setUser",
+                                    "setTime", "reboot", etc.).
+                            - type: object
+                              required: [data]
+                              properties:
+                                data:
+                                  $ref: '#/components/schemas/GetUserFingerResponse'
+                        - $ref: '#/components/schemas/WebhookFailed'
+              responses:
+                '200':
+                  description: Webhook acknowledged.
+                '4XX':
+                  description: Error (retried up to 5 times).
+    put:
+      tags: [Credentials]
+      summary: Set all user fingerprints (array payload)
+      operationId: setUserAllFinger
+      x-supported-brands: [vida, vivo, zkteco]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetUserAllFingerRequest'
+      responses:
+        '200':
+          description: Command queued. Result sent to webhook callback.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AckResponse'
+        '400':
+          description: Invalid request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Device not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      callbacks:
+        deviceWebhook:
+          '{$request.path#/cloud_id}':
+            post:
+              summary: Set all fingerprints result
+              description: Posted to the device's registered webhook URL.
+              requestBody:
+                required: true
+                content:
+                  application/json:
+                    schema:
+                      oneOf:
+                        - allOf:
+                            - type: object
+                              required: [referenceId, status, commandType, data]
+                              properties:
+                                referenceId:
+                                  type: string
+                                status:
+                                  type: string
+                                  enum: [success]
+                                commandType:
+                                  type: string
+                                  description: >
+                                    The command type that was executed (e.g. "getUser", "setUser",
+                                    "setTime", "reboot", etc.).
+                            - type: object
+                              required: [data]
+                              properties:
+                                data:
+                                  $ref: '#/components/schemas/OperationResult'
+                        - $ref: '#/components/schemas/WebhookFailed'
+              responses:
+                '200':
+                  description: Webhook acknowledged.
+                '4XX':
+                  description: Error (retried up to 5 times).
+    delete:
+      tags: [Credentials]
+      summary: Delete all user fingerprints
+      operationId: deleteAllUserFinger
+      x-supported-brands: [vida]
+      responses:
+        '200':
+          description: Command queued. Result sent to webhook callback.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AckResponse'
+        '400':
+          description: Invalid request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Device not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      callbacks:
+        deviceWebhook:
+          '{$request.path#/cloud_id}':
+            post:
+              summary: Delete all fingerprints result
+              description: Posted to the device's registered webhook URL.
+              requestBody:
+                required: true
+                content:
+                  application/json:
+                    schema:
+                      oneOf:
+                        - allOf:
+                            - type: object
+                              required: [referenceId, status, commandType, data]
+                              properties:
+                                referenceId:
+                                  type: string
+                                status:
+                                  type: string
+                                  enum: [success]
+                                commandType:
+                                  type: string
+                                  description: >
+                                    The command type that was executed (e.g. "getUser", "setUser",
+                                    "setTime", "reboot", etc.).
+                            - type: object
+                              required: [data]
+                              properties:
+                                data:
+                                  $ref: '#/components/schemas/OperationResult'
+                        - $ref: '#/components/schemas/WebhookFailed'
+              responses:
+                '200':
+                  description: Webhook acknowledged.
+                '4XX':
+                  description: Error (retried up to 5 times).
+
+  /v1/{cloud_id}/users/{id}/finger/{fingerNo}:
+    parameters:
+      - $ref: '#/components/parameters/CloudIdParam'
+      - $ref: '#/components/parameters/UserIdParam'
+      - $ref: '#/components/parameters/ReferenceIdHeader'
+      - $ref: '#/components/parameters/WebhookUrlHeader'
+      - name: fingerNo
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 10
+        description: Fingerprint slot number (1-10).
+    get:
+      tags: [Credentials]
+      summary: Get specific user fingerprint
+      operationId: getUserFinger
+      x-supported-brands: [vida, vivo, zkteco]
+      responses:
+        '200':
+          description: Command queued. Result sent to webhook callback.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AckResponse'
+        '400':
+          description: Invalid request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Device not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      callbacks:
+        deviceWebhook:
+          '{$request.path#/cloud_id}':
+            post:
+              summary: Get fingerprint result
+              description: Posted to the device's registered webhook URL.
+              requestBody:
+                required: true
+                content:
+                  application/json:
+                    schema:
+                      oneOf:
+                        - allOf:
+                            - type: object
+                              required: [referenceId, status, commandType, data]
+                              properties:
+                                referenceId:
+                                  type: string
+                                status:
+                                  type: string
+                                  enum: [success]
+                                commandType:
+                                  type: string
+                                  description: >
+                                    The command type that was executed (e.g. "getUser", "setUser",
+                                    "setTime", "reboot", etc.).
+                            - type: object
+                              required: [data]
+                              properties:
+                                data:
+                                  $ref: '#/components/schemas/GetUserFingerResponse'
+                        - $ref: '#/components/schemas/WebhookFailed'
+              responses:
+                '200':
+                  description: Webhook acknowledged.
+                '4XX':
+                  description: Error (retried up to 5 times).
+    put:
+      tags: [Credentials]
+      summary: Set specific user fingerprint
+      operationId: setUserFinger
+      x-supported-brands: [vida, vivo, zkteco]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetUserFingerRequest'
+      responses:
+        '200':
+          description: Command queued. Result sent to webhook callback.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AckResponse'
+        '400':
+          description: Invalid request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Device not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      callbacks:
+        deviceWebhook:
+          '{$request.path#/cloud_id}':
+            post:
+              summary: Set fingerprint result
+              description: Posted to the device's registered webhook URL.
+              requestBody:
+                required: true
+                content:
+                  application/json:
+                    schema:
+                      oneOf:
+                        - allOf:
+                            - type: object
+                              required: [referenceId, status, commandType, data]
+                              properties:
+                                referenceId:
+                                  type: string
+                                status:
+                                  type: string
+                                  enum: [success]
+                                commandType:
+                                  type: string
+                                  description: >
+                                    The command type that was executed (e.g. "getUser", "setUser",
+                                    "setTime", "reboot", etc.).
+                            - type: object
+                              required: [data]
+                              properties:
+                                data:
+                                  $ref: '#/components/schemas/OperationResult'
+                        - $ref: '#/components/schemas/WebhookFailed'
+              responses:
+                '200':
+                  description: Webhook acknowledged.
+                '4XX':
+                  description: Error (retried up to 5 times).
+    delete:
+      tags: [Credentials]
+      summary: Delete a single fingerprint
+      operationId: deleteUserFinger
+      x-supported-brands: [vivo, zkteco]
+      responses:
+        '200':
+          description: Command queued. Result sent to webhook callback.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AckResponse'
+        '400':
+          description: Invalid request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Device not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      callbacks:
+        deviceWebhook:
+          '{$request.path#/cloud_id}':
+            post:
+              summary: Delete fingerprint result
+              description: Posted to the device's registered webhook URL.
+              requestBody:
+                required: true
+                content:
+                  application/json:
+                    schema:
+                      oneOf:
+                        - allOf:
+                            - type: object
+                              required: [referenceId, status, commandType, data]
+                              properties:
+                                referenceId:
+                                  type: string
+                                status:
+                                  type: string
+                                  enum: [success]
+                                commandType:
+                                  type: string
+                                  description: >
+                                    The command type that was executed (e.g. "getUser", "setUser",
+                                    "setTime", "reboot", etc.).
+                            - type: object
+                              required: [data]
+                              properties:
+                                data:
+                                  $ref: '#/components/schemas/OperationResult'
+                        - $ref: '#/components/schemas/WebhookFailed'
+              responses:
+                '200':
+                  description: Webhook acknowledged.
+                '4XX':
+                  description: Error (retried up to 5 times).
+
+  # ==========================================================================
+  # 14e. GET/PUT /v1/{cloud_id}/users/{id}/face — Get/Set User Face
+  # ==========================================================================
+  /v1/{cloud_id}/users/{id}/face:
+    parameters:
+      - $ref: '#/components/parameters/CloudIdParam'
+      - $ref: '#/components/parameters/UserIdParam'
+      - $ref: '#/components/parameters/ReferenceIdHeader'
+      - $ref: '#/components/parameters/WebhookUrlHeader'
+    get:
+      tags: [Credentials]
+      summary: Get user face
+      operationId: getUserFace
+      x-supported-brands: [vida, vivo]
+      responses:
+        '200':
+          description: Command queued. Result sent to webhook callback.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AckResponse'
+        '400':
+          description: Invalid request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Device not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      callbacks:
+        deviceWebhook:
+          '{$request.path#/cloud_id}':
+            post:
+              summary: Get face result
+              description: Posted to the device's registered webhook URL.
+              requestBody:
+                required: true
+                content:
+                  application/json:
+                    schema:
+                      oneOf:
+                        - allOf:
+                            - type: object
+                              required: [referenceId, status, commandType, data]
+                              properties:
+                                referenceId:
+                                  type: string
+                                status:
+                                  type: string
+                                  enum: [success]
+                                commandType:
+                                  type: string
+                                  description: >
+                                    The command type that was executed (e.g. "getUser", "setUser",
+                                    "setTime", "reboot", etc.).
+                            - type: object
+                              required: [data]
+                              properties:
+                                data:
+                                  $ref: '#/components/schemas/GetUserFaceResponse'
+                        - $ref: '#/components/schemas/WebhookFailed'
+              responses:
+                '200':
+                  description: Webhook acknowledged.
+                '4XX':
+                  description: Error (retried up to 5 times).
+    put:
+      tags: [Credentials]
+      summary: Set user face
+      operationId: setUserFace
+      x-supported-brands: [vida, vivo]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetUserFaceRequest'
+      responses:
+        '200':
+          description: Command queued. Result sent to webhook callback.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AckResponse'
+        '400':
+          description: Invalid request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Device not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      callbacks:
+        deviceWebhook:
+          '{$request.path#/cloud_id}':
+            post:
+              summary: Set face result
+              description: Posted to the device's registered webhook URL.
+              requestBody:
+                required: true
+                content:
+                  application/json:
+                    schema:
+                      oneOf:
+                        - allOf:
+                            - type: object
+                              required: [referenceId, status, commandType, data]
+                              properties:
+                                referenceId:
+                                  type: string
+                                status:
+                                  type: string
+                                  enum: [success]
+                                commandType:
+                                  type: string
+                                  description: >
+                                    The command type that was executed (e.g. "getUser", "setUser",
+                                    "setTime", "reboot", etc.).
+                            - type: object
+                              required: [data]
+                              properties:
+                                data:
+                                  $ref: '#/components/schemas/OperationResult'
+                        - $ref: '#/components/schemas/WebhookFailed'
+              responses:
+                '200':
+                  description: Webhook acknowledged.
+                '4XX':
+                  description: Error (retried up to 5 times).
+    delete:
+      tags: [Credentials]
+      summary: Delete face data
+      operationId: deleteUserFace
+      x-supported-brands: [vida, vivo]
+      responses:
+        '200':
+          description: Command queued. Result sent to webhook callback.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AckResponse'
+        '400':
+          description: Invalid request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Device not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      callbacks:
+        deviceWebhook:
+          '{$request.path#/cloud_id}':
+            post:
+              summary: Delete face result
+              description: Posted to the device's registered webhook URL.
+              requestBody:
+                required: true
+                content:
+                  application/json:
+                    schema:
+                      oneOf:
+                        - allOf:
+                            - type: object
+                              required: [referenceId, status, commandType, data]
+                              properties:
+                                referenceId:
+                                  type: string
+                                status:
+                                  type: string
+                                  enum: [success]
+                                commandType:
+                                  type: string
+                                  description: >
+                                    The command type that was executed (e.g. "getUser", "setUser",
+                                    "setTime", "reboot", etc.).
+                            - type: object
+                              required: [data]
+                              properties:
+                                data:
+                                  $ref: '#/components/schemas/OperationResult'
+                        - $ref: '#/components/schemas/WebhookFailed'
+              responses:
+                '200':
+                  description: Webhook acknowledged.
+                '4XX':
+                  description: Error (retried up to 5 times).
+
+  # ==========================================================================
+  # 14f. POST /v1/{cloud_id}/enroll/* — Enrollment (async, device-initiated)
+  # ==========================================================================
+  /v1/{cloud_id}/enroll/finger:
+    parameters:
+      - $ref: '#/components/parameters/CloudIdParam'
+      - $ref: '#/components/parameters/ReferenceIdHeader'
+      - $ref: '#/components/parameters/WebhookUrlHeader'
+    post:
+      tags: [Credentials]
+      summary: Enroll fingerprint (async, device-initiated)
+      operationId: enrollFinger
+      x-supported-brands: [revo, vega]
+      description: >
+        Triggers the device to enter fingerprint enrollment mode. The user must
+        place their finger on the sensor after the command is sent. The captured
+        template arrives asynchronously via the realtime_enroll_data event.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EnrollFingerRequest'
+      responses:
+        '200':
+          description: Command queued. Result sent to webhook callback.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AckResponse'
+        '400':
+          description: Invalid request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Device not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      callbacks:
+        deviceWebhook:
+          '{$request.path#/cloud_id}':
+            post:
+              summary: Enroll finger result
+              description: Posted to the device's registered webhook URL.
+              requestBody:
+                required: true
+                content:
+                  application/json:
+                    schema:
+                      oneOf:
+                        - allOf:
+                            - type: object
+                              required: [referenceId, status, commandType, data]
+                              properties:
+                                referenceId:
+                                  type: string
+                                status:
+                                  type: string
+                                  enum: [success]
+                                commandType:
+                                  type: string
+                                  description: >
+                                    The command type that was executed (e.g. "getUser", "setUser",
+                                    "setTime", "reboot", etc.).
+                            - type: object
+                              required: [data]
+                              properties:
+                                data:
+                                  $ref: '#/components/schemas/EnrollResponse'
+                        - $ref: '#/components/schemas/WebhookFailed'
+              responses:
+                '200':
+                  description: Webhook acknowledged.
+                '4XX':
+                  description: Error (retried up to 5 times).
+
+  /v1/{cloud_id}/enroll/face:
+    parameters:
+      - $ref: '#/components/parameters/CloudIdParam'
+      - $ref: '#/components/parameters/ReferenceIdHeader'
+      - $ref: '#/components/parameters/WebhookUrlHeader'
+    post:
+      tags: [Credentials]
+      summary: Enroll face (async, device-initiated)
+      operationId: enrollFace
+      x-supported-brands: [revo, vega]
+      description: >
+        Triggers the device to enter face enrollment mode. The user must
+        face the camera after the command is sent. The captured template
+        arrives asynchronously via the realtime_enroll_data event.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EnrollFaceRequest'
+      responses:
+        '200':
+          description: Command queued. Result sent to webhook callback.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AckResponse'
+        '400':
+          description: Invalid request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Device not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      callbacks:
+        deviceWebhook:
+          '{$request.path#/cloud_id}':
+            post:
+              summary: Enroll face result
+              description: Posted to the device's registered webhook URL.
+              requestBody:
+                required: true
+                content:
+                  application/json:
+                    schema:
+                      oneOf:
+                        - allOf:
+                            - type: object
+                              required: [referenceId, status, commandType, data]
+                              properties:
+                                referenceId:
+                                  type: string
+                                status:
+                                  type: string
+                                  enum: [success]
+                                commandType:
+                                  type: string
+                                  description: >
+                                    The command type that was executed (e.g. "getUser", "setUser",
+                                    "setTime", "reboot", etc.).
+                            - type: object
+                              required: [data]
+                              properties:
+                                data:
+                                  $ref: '#/components/schemas/EnrollResponse'
+                        - $ref: '#/components/schemas/WebhookFailed'
+              responses:
+                '200':
+                  description: Webhook acknowledged.
+                '4XX':
+                  description: Error (retried up to 5 times).
+
+  /v1/{cloud_id}/enroll/vein:
+    parameters:
+      - $ref: '#/components/parameters/CloudIdParam'
+      - $ref: '#/components/parameters/ReferenceIdHeader'
+      - $ref: '#/components/parameters/WebhookUrlHeader'
+    post:
+      tags: [Credentials]
+      summary: Enroll vein (async, device-initiated)
+      operationId: enrollVein
+      x-supported-brands: [revo, vega]
+      description: >
+        Triggers the device to enter vein enrollment mode. The user must
+        place their vein on the sensor after the command is sent. The captured
+        template arrives asynchronously via the realtime_enroll_data event.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EnrollVeinRequest'
+      responses:
+        '200':
+          description: Command queued. Result sent to webhook callback.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AckResponse'
+        '400':
+          description: Invalid request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Device not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      callbacks:
+        deviceWebhook:
+          '{$request.path#/cloud_id}':
+            post:
+              summary: Enroll vein result
+              description: Posted to the device's registered webhook URL.
+              requestBody:
+                required: true
+                content:
+                  application/json:
+                    schema:
+                      oneOf:
+                        - allOf:
+                            - type: object
+                              required: [referenceId, status, commandType, data]
+                              properties:
+                                referenceId:
+                                  type: string
+                                status:
+                                  type: string
+                                  enum: [success]
+                                commandType:
+                                  type: string
+                                  description: >
+                                    The command type that was executed (e.g. "getUser", "setUser",
+                                    "setTime", "reboot", etc.).
+                            - type: object
+                              required: [data]
+                              properties:
+                                data:
+                                  $ref: '#/components/schemas/EnrollResponse'
+                        - $ref: '#/components/schemas/WebhookFailed'
+              responses:
+                '200':
+                  description: Webhook acknowledged.
+                '4XX':
+                  description: Error (retried up to 5 times).
+
+  # ==========================================================================
+  # 15. GET /v1/{cloud_id}/timezone — Get Timezone
+  # ==========================================================================
+  /v1/{cloud_id}/timezone:
+    parameters:
+      - $ref: '#/components/parameters/CloudIdParam'
+      - $ref: '#/components/parameters/ReferenceIdHeader'
+      - $ref: '#/components/parameters/WebhookUrlHeader'
+    get:
+      tags: [Timezone]
+      summary: Get device timezone
+      operationId: getTimezone
+      x-supported-brands: [vida]
+      responses:
+        '200':
+          description: Command queued. Result sent to webhook callback.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AckResponse'
+        '400':
+          description: Invalid request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Device not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      callbacks:
+        deviceWebhook:
+          '{$request.path#/cloud_id}':
+            post:
+              summary: Get timezone result
+              description: Posted to the device's registered webhook URL.
+              requestBody:
+                required: true
+                content:
+                  application/json:
+                    schema:
+                      oneOf:
+                        - allOf:
+                            - type: object
+                              required: [referenceId, status, commandType, data]
+                              properties:
+                                referenceId:
+                                  type: string
+                                status:
+                                  type: string
+                                  enum: [success]
+                                commandType:
+                                  type: string
+                                  description: >
+                                    The command type that was executed (e.g. "getUser", "setUser",
+                                    "setTime", "reboot", etc.).
+                            - type: object
+                              required: [data]
+                              properties:
+                                data:
+                                  type: object
+                                  required: [timezone]
+                                  properties:
+                                    timezone:
+                                      type: string
+                                      description: Current timezone string (e.g. "Asia/Jakarta").
+                        - $ref: '#/components/schemas/WebhookFailed'
+              responses:
+                '200':
+                  description: Webhook acknowledged.
+                '4XX':
+                  description: Error (retried up to 5 times).
+
+    # ========================================================================
+    # 16. PUT /v1/{cloud_id}/timezone — Set Timezone
+    # ========================================================================
+    put:
+      tags: [Timezone]
+      summary: Set device timezone
+      operationId: setTimezone
+      x-supported-brands: [vida]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [timezone]
+              properties:
+                timezone:
+                  type: string
+                  description: IANA timezone string (e.g. "Asia/Jakarta").
+      responses:
+        '200':
+          description: Command queued. Result sent to webhook callback.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AckResponse'
+        '400':
+          description: Invalid request body.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Device not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      callbacks:
+        deviceWebhook:
+          '{$request.path#/cloud_id}':
+            post:
+              summary: Set timezone result
+              description: Posted to the device's registered webhook URL.
+              requestBody:
+                required: true
+                content:
+                  application/json:
+                    schema:
+                      oneOf:
+                        - allOf:
+                            - type: object
+                              required: [referenceId, status, commandType, data]
+                              properties:
+                                referenceId:
+                                  type: string
+                                status:
+                                  type: string
+                                  enum: [success]
+                                commandType:
+                                  type: string
+                                  description: >
+                                    The command type that was executed (e.g. "getUser", "setUser",
+                                    "setTime", "reboot", etc.).
+                            - type: object
+                              required: [data]
+                              properties:
+                                data:
+                                  $ref: '#/components/schemas/OperationResult'
+                        - $ref: '#/components/schemas/WebhookFailed'
+              responses:
+                '200':
+                  description: Webhook acknowledged.
+                '4XX':
+                  description: Error (retried up to 5 times).
+
+  # ==========================================================================
+  # 17. PUT /v1/{cloud_id}/timezone/lock — Set Timezone Lock
+  # ==========================================================================
+  /v1/{cloud_id}/timezone/lock:
+    parameters:
+      - $ref: '#/components/parameters/CloudIdParam'
+      - $ref: '#/components/parameters/ReferenceIdHeader'
+      - $ref: '#/components/parameters/WebhookUrlHeader'
+    put:
+      tags: [Timezone]
+      summary: Lock/unlock timezone setting
+      description: >
+        Lock or unlock timezone setting so the user cannot change it
+        from the device.
+      operationId: setTimezoneLock
+      x-supported-brands: [vivo]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [lock]
+              properties:
+                lock:
+                  type: boolean
+                  description: true = lock, false = unlock.
+      responses:
+        '200':
+          description: Command queued. Result sent to webhook callback.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AckResponse'
+        '400':
+          description: Invalid request body.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Device not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      callbacks:
+        deviceWebhook:
+          '{$request.path#/cloud_id}':
+            post:
+              summary: Set timezone lock result
+              description: Posted to the device's registered webhook URL.
+              requestBody:
+                required: true
+                content:
+                  application/json:
+                    schema:
+                      oneOf:
+                        - allOf:
+                            - type: object
+                              required: [referenceId, status, commandType, data]
+                              properties:
+                                referenceId:
+                                  type: string
+                                status:
+                                  type: string
+                                  enum: [success]
+                                commandType:
+                                  type: string
+                                  description: >
+                                    The command type that was executed (e.g. "getUser", "setUser",
+                                    "setTime", "reboot", etc.).
+                            - type: object
+                              required: [data]
+                              properties:
+                                data:
+                                  $ref: '#/components/schemas/OperationResult'
+                        - $ref: '#/components/schemas/WebhookFailed'
+              responses:
+                '200':
+                  description: Webhook acknowledged.
+                '4XX':
+                  description: Error (retried up to 5 times).
+
+  # ==========================================================================
+  # 18. POST /v1/{cloud_id}/door/open — Open Door
+  # ==========================================================================
+  /v1/{cloud_id}/door/open:
+    parameters:
+      - $ref: '#/components/parameters/CloudIdParam'
+      - $ref: '#/components/parameters/ReferenceIdHeader'
+      - $ref: '#/components/parameters/WebhookUrlHeader'
+    post:
+      tags: [Door]
+      summary: Open door
+      operationId: openDoor
+      x-supported-brands: [vida]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                channel:
+                  type: integer
+                  description: Door channel number. Defaults to 1.
+      responses:
+        '200':
+          description: Command queued. Result sent to webhook callback.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AckResponse'
+        '400':
+          description: Invalid request body.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Device not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      callbacks:
+        deviceWebhook:
+          '{$request.path#/cloud_id}':
+            post:
+              summary: Open door result
+              description: Posted to the device's registered webhook URL.
+              requestBody:
+                required: true
+                content:
+                  application/json:
+                    schema:
+                      oneOf:
+                        - allOf:
+                            - type: object
+                              required: [referenceId, status, commandType, data]
+                              properties:
+                                referenceId:
+                                  type: string
+                                status:
+                                  type: string
+                                  enum: [success]
+                                commandType:
+                                  type: string
+                                  description: >
+                                    The command type that was executed (e.g. "getUser", "setUser",
+                                    "setTime", "reboot", etc.).
+                            - type: object
+                              required: [data]
+                              properties:
+                                data:
+                                  $ref: '#/components/schemas/OperationResult'
+                        - $ref: '#/components/schemas/WebhookFailed'
+              responses:
+                '200':
+                  description: Webhook acknowledged.
+                '4XX':
+                  description: Error (retried up to 5 times).
+
+  # ==========================================================================
+  # 19. POST /v1/{cloud_id}/door/close — Close Door
+  # ==========================================================================
+  /v1/{cloud_id}/door/close:
+    parameters:
+      - $ref: '#/components/parameters/CloudIdParam'
+      - $ref: '#/components/parameters/ReferenceIdHeader'
+      - $ref: '#/components/parameters/WebhookUrlHeader'
+    post:
+      tags: [Door]
+      summary: Close door
+      operationId: closeDoor
+      x-supported-brands: [vida]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                channel:
+                  type: integer
+                  description: Door channel number. Defaults to 1.
+      responses:
+        '200':
+          description: Command queued. Result sent to webhook callback.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AckResponse'
+        '400':
+          description: Invalid request body.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Device not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      callbacks:
+        deviceWebhook:
+          '{$request.path#/cloud_id}':
+            post:
+              summary: Close door result
+              description: Posted to the device's registered webhook URL.
+              requestBody:
+                required: true
+                content:
+                  application/json:
+                    schema:
+                      oneOf:
+                        - allOf:
+                            - type: object
+                              required: [referenceId, status, commandType, data]
+                              properties:
+                                referenceId:
+                                  type: string
+                                status:
+                                  type: string
+                                  enum: [success]
+                                commandType:
+                                  type: string
+                                  description: >
+                                    The command type that was executed (e.g. "getUser", "setUser",
+                                    "setTime", "reboot", etc.).
+                            - type: object
+                              required: [data]
+                              properties:
+                                data:
+                                  $ref: '#/components/schemas/OperationResult'
+                        - $ref: '#/components/schemas/WebhookFailed'
+              responses:
+                '200':
+                  description: Webhook acknowledged.
+                '4XX':
+                  description: Error (retried up to 5 times).
+
+  # ==========================================================================
+  # 20. GET /v1/{cloud_id}/door/status — Get Door Status
+  # ==========================================================================
+  /v1/{cloud_id}/door/status:
+    parameters:
+      - $ref: '#/components/parameters/CloudIdParam'
+      - $ref: '#/components/parameters/ReferenceIdHeader'
+      - $ref: '#/components/parameters/WebhookUrlHeader'
+    get:
+      tags: [Door]
+      summary: Get door status
+      operationId: getDoorStatus
+      x-supported-brands: [vida]
+      parameters:
+        - name: channel
+          in: query
+          required: false
+          schema:
+            type: integer
+          description: Door channel number. Defaults to 1.
+      responses:
+        '200':
+          description: Command queued. Result sent to webhook callback.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AckResponse'
+        '400':
+          description: Invalid request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Device not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      callbacks:
+        deviceWebhook:
+          '{$request.path#/cloud_id}':
+            post:
+              summary: Door status result
+              description: Posted to the device's registered webhook URL.
+              requestBody:
+                required: true
+                content:
+                  application/json:
+                    schema:
+                      oneOf:
+                        - allOf:
+                            - type: object
+                              required: [referenceId, status, commandType, data]
+                              properties:
+                                referenceId:
+                                  type: string
+                                status:
+                                  type: string
+                                  enum: [success]
+                                commandType:
+                                  type: string
+                                  description: >
+                                    The command type that was executed (e.g. "getUser", "setUser",
+                                    "setTime", "reboot", etc.).
+                            - type: object
+                              required: [data]
+                              properties:
+                                data:
+                                  type: object
+                                  properties:
+                                    doorStatus:
+                                      type: string
+                                      description: Door status (e.g. "open", "closed").
+                        - $ref: '#/components/schemas/WebhookFailed'
+              responses:
+                '200':
+                  description: Webhook acknowledged.
+                '4XX':
+                  description: Error (retried up to 5 times).
+
+  # ==========================================================================
+  # 21. GET /v1/{cloud_id}/users/{id}/valid — Get User Valid Date
+  # ==========================================================================
+  /v1/{cloud_id}/users/{id}/valid:
+    parameters:
+      - $ref: '#/components/parameters/CloudIdParam'
+      - $ref: '#/components/parameters/UserIdParam'
+      - $ref: '#/components/parameters/ReferenceIdHeader'
+      - $ref: '#/components/parameters/WebhookUrlHeader'
+    get:
+      tags: [Valid Date]
+      summary: Get user validity period
+      operationId: getUserValidDate
+      x-supported-brands: [vega]
+      responses:
+        '200':
+          description: Command queued. Result sent to webhook callback.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AckResponse'
+        '400':
+          description: Invalid request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Device not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      callbacks:
+        deviceWebhook:
+          '{$request.path#/cloud_id}':
+            post:
+              summary: Get user valid date result
+              description: Posted to the device's registered webhook URL.
+              requestBody:
+                required: true
+                content:
+                  application/json:
+                    schema:
+                      oneOf:
+                        - allOf:
+                            - type: object
+                              required: [referenceId, status, commandType, data]
+                              properties:
+                                referenceId:
+                                  type: string
+                                status:
+                                  type: string
+                                  enum: [success]
+                                commandType:
+                                  type: string
+                                  description: >
+                                    The command type that was executed (e.g. "getUser", "setUser",
+                                    "setTime", "reboot", etc.).
+                            - type: object
+                              required: [data]
+                              properties:
+                                data:
+                                  $ref: '#/components/schemas/ValidDateData'
+                        - $ref: '#/components/schemas/WebhookFailed'
+              responses:
+                '200':
+                  description: Webhook acknowledged.
+                '4XX':
+                  description: Error (retried up to 5 times).
+
+    # ========================================================================
+    # 22. PUT /v1/{cloud_id}/users/{id}/valid — Set User Valid Date
+    # ========================================================================
+    put:
+      tags: [Valid Date]
+      summary: Set user validity period
+      operationId: setUserValidDate
+      x-supported-brands: [vega]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetUserValidDateRequest'
+      responses:
+        '200':
+          description: Command queued. Result sent to webhook callback.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AckResponse'
+        '400':
+          description: Invalid request body.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Device not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      callbacks:
+        deviceWebhook:
+          '{$request.path#/cloud_id}':
+            post:
+              summary: Set user valid date result
+              description: Posted to the device's registered webhook URL.
+              requestBody:
+                required: true
+                content:
+                  application/json:
+                    schema:
+                      oneOf:
+                        - allOf:
+                            - type: object
+                              required: [referenceId, status, commandType, data]
+                              properties:
+                                referenceId:
+                                  type: string
+                                status:
+                                  type: string
+                                  enum: [success]
+                                commandType:
+                                  type: string
+                                  description: >
+                                    The command type that was executed (e.g. "getUser", "setUser",
+                                    "setTime", "reboot", etc.).
+                            - type: object
+                              required: [data]
+                              properties:
+                                data:
+                                  $ref: '#/components/schemas/OperationResult'
+                        - $ref: '#/components/schemas/WebhookFailed'
+              responses:
+                '200':
+                  description: Webhook acknowledged.
+                '4XX':
+                  description: Error (retried up to 5 times).
+
+  # ==========================================================================
+  # 23. PUT /v1/{cloud_id}/webhook — Set Webhook URL
+  # ==========================================================================
+  /v1/{cloud_id}/webhook:
+    parameters:
+      - $ref: '#/components/parameters/CloudIdParam'
+      - $ref: '#/components/parameters/ReferenceIdHeader'
+    put:
+      tags: [Webhook Config]
+      summary: Set default webhook URL for device
+      description: >
+        Sets the default webhook URL used for async command results.
+        Overrides the V2_DEFAULT_WEBHOOK_URL env var for this device.
+        This endpoint is synchronous — returns directly, no callback webhook.
+      operationId: setWebhook
+      x-supported-brands: [vivo, vida, revo, vega, zkteco]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetWebhookRequest'
+      responses:
+        '200':
+          description: Webhook URL updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SetWebhookResponse'
+        '400':
+          description: Invalid request body.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # ==========================================================================
+  # 23.5 POST /v1/{cloud_id}/webhook/test — Test Webhook Reachability
+  # ==========================================================================
+  /v1/{cloud_id}/webhook/test:
+    parameters:
+      - $ref: '#/components/parameters/CloudIdParam'
+    post:
+      tags: [Webhook Config]
+      summary: Test webhook reachability
+      description: >
+        Tests whether the device's configured webhook URL is reachable.
+        Sends a GET request to the resolved URL and returns the status.
+        Synchronous — no acknowledgement or callback.
+      operationId: testWebhook
+      x-supported-brands: [vivo, vida, revo, vega, zkteco]
+      responses:
+        '200':
+          description: Webhook test result.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestWebhookResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # ==========================================================================
+  # 24. PUT /v1/{cloud_id}/credentials — Update Device Password in Registry
+  # ==========================================================================
+  /v1/{cloud_id}/credentials:
+    parameters:
+      - $ref: '#/components/parameters/CloudIdParam'
+    put:
+      tags: [Device]
+      summary: Update device registry password
+      description: >
+        Updates the device's login password stored in the NATS device-registry KV.
+        Synchronous — returns directly. Does not send a command to the device itself.
+      operationId: updateDevicePassword
+      x-supported-brands: [vivo, vida, revo, vega, zkteco]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [password]
+              properties:
+                password:
+                  type: string
+                  description: New device login password.
+      responses:
+        '200':
+          description: Password updated.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [ok]
+                  message:
+                    type: string
+        '400':
+          description: Invalid request body.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Device not found in registry.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Registry write failed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    delete:
+      tags: [Device]
+      summary: Remove device from registry
+      description: >
+        Deletes the device entry from the NATS device-registry KV.
+        Synchronous — returns directly.
+      operationId: deleteDeviceFromRegistry
+      x-supported-brands: [vivo, vida, revo, vega, zkteco]
+      responses:
+        '200':
+          description: Device removed from registry.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [ok]
+                  message:
+                    type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Device not found in registry.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Registry delete failed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # ==========================================================================
+  # 25. GET /v1/devices — List Devices
+  # ==========================================================================
+  /v1/devices:
+    get:
+      tags: [Devices]
+      summary: List all registered devices (DEV ONLY)
+      description: >
+        Returns all cloud IDs from the devices file.
+      operationId: listDevices
+      x-supported-brands: [vivo, vida, revo, vega, zkteco]
+      parameters:
+        - $ref: '#/components/parameters/ReferenceIdHeader'
+        - name: prefix
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Filter devices by cloud ID prefix (development only).
+      responses:
+        '200':
+          description: List of device cloud IDs.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [devices, total]
+                properties:
+                  devices:
+                    type: array
+                    items:
+                      type: string
+                  total:
+                    type: integer
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    # ========================================================================
+    # 25. POST /v1/devices — Add Device
+    # ========================================================================
+    post:
+      tags: [Devices]
+      summary: Register a new device (DEV ONLY)
+      description: >
+        Adds a cloud ID to the devices file. If brand is provided, also
+        creates a device entry in the NATS KV device-registry.
+      operationId: addDevice
+      x-supported-brands: [vivo, vida, revo, vega, zkteco]
+      parameters:
+        - $ref: '#/components/parameters/ReferenceIdHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [cloudId]
+              properties:
+                cloudId:
+                  type: string
+                  description: Device cloud ID to register.
+                brand:
+                  type: string
+                  description: Device brand (e.g. "vida", "vivo"). If provided, also creates a registry entry.
+                username:
+                  type: string
+                  description: Device login username.
+                password:
+                  type: string
+                  description: Device login password.
+      responses:
+        '200':
+          description: Device registered.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [ok]
+                  message:
+                    type: string
+        '400':
+          description: Invalid request body.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # ==========================================================================
+  # 26. DELETE /v1/devices/{cloud_id} — Remove Device
+  # ==========================================================================
+  /v1/devices/{cloud_id}:
+    delete:
+      tags: [Devices]
+      summary: Remove a device (DEV ONLY)
+      description: >
+        Removes a cloud ID from the devices file.
+      operationId: removeDevice
+      x-supported-brands: [vivo, vida, revo, vega, zkteco]
+      parameters:
+        - $ref: '#/components/parameters/ReferenceIdHeader'
+        - name: cloud_id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Device cloud ID to remove.
+      responses:
+        '200':
+          description: Device removed.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [ok]
+                  message:
+                    type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+# ============================================================================
+# REALTIME WEBHOOK — Attendance Push
+# ============================================================================
+webhooks:
+  realtimeAttendance:
+    post:
+      summary: Real-time attendance event push
+      description: >
+        Pushed per-device when a user scans at the device. Not wrapped in
+        WebhookSuccess — this is a standalone push. No referenceId.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AttendancePushPayload'
+      responses:
+        '200':
+          description: Webhook acknowledged.
+        '4XX':
+          description: Error (retried up to 5 times).
+
+  realtimeVerificationFailed:
+    post:
+      summary: Real-time verification failed event push
+      description: >
+        Pushed per-device when a verification attempt is rejected
+        (expired validity, unrecognised credential, anti-spoof failure, etc.).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VerificationFailedPushPayload'
+      responses:
+        '200':
+          description: Webhook acknowledged.
+        '4XX':
+          description: Error (retried up to 5 times).
+
+  realtimeDoorEvent:
+    post:
+      summary: Real-time door event push
+      description: >
+        Pushed per-device for door state changes (open, close, alarm).
+        The event field differentiates: "doorOpen", "doorClose", "doorAlarm".
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DoorEventPushPayload'
+      responses:
+        '200':
+          description: Webhook acknowledged.
+        '4XX':
+          description: Error (retried up to 5 times).
+
+  realtimeDoorbell:
+    post:
+      summary: Real-time doorbell event push
+      description: >
+        Pushed per-device when the doorbell button is pressed.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DoorbellPushPayload'
+      responses:
+        '200':
+          description: Webhook acknowledged.
+        '4XX':
+          description: Error (retried up to 5 times).
+
+  realtimeTamper:
+    post:
+      summary: Real-time tamper event push
+      description: >
+        Pushed per-device when physical tampering is detected.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TamperPushPayload'
+      responses:
+        '200':
+          description: Webhook acknowledged.
+        '4XX':
+          description: Error (retried up to 5 times).
+
+  realtimeDeviceEvent:
+    post:
+      summary: Real-time device event push (alarm, exception, operation)
+      description: >
+        Pushed per-device for alarm, exception, and operation events.
+        The event field differentiates: "alarm", "exception", "operation".
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeviceEventPushPayload'
+      responses:
+        '200':
+          description: Webhook acknowledged.
+        '4XX':
+          description: Error (retried up to 5 times).
+
+  realtimeUserChange:
+    post:
+      summary: Real-time user change event push
+      description: >
+        Pushed per-device when user data is added, modified, or deleted
+        directly on the device (not through the hub).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserChangePushPayload'
+      responses:
+        '200':
+          description: Webhook acknowledged.
+        '4XX':
+          description: Error (retried up to 5 times).
+
+# ============================================================================
+# COMPONENTS
+# ============================================================================
+components:
+
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+
+  parameters:
+    CloudIdParam:
+      name: cloud_id
+      in: path
+      required: true
+      schema:
+        type: string
+      description: The device's unique cloud identifier.
+    UserIdParam:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+      description: The user's employee number.
+    ReferenceIdHeader:
+      name: X-Reference-ID
+      in: header
+      required: true
+      schema:
+        type: string
+      description: Client-supplied correlation ID for tracking the request.
+    WebhookUrlHeader:
+      name: X-Webhook-URL
+      in: header
+      required: false
+      schema:
+        type: string
+      description: >
+        Comma-separated extra webhook URLs for this request. The payload is
+        sent to the device's registered webhook URL AND every URL in this list
+        (up to V2_WEBHOOK_MAX_URLS, default 3). Takes precedence over the
+        per-device default for additional delivery. Example:
+        http://relay:3000/__webhook/relay?sid=abc,https://my-server.com/hook
+
+  responses:
+    Unauthorized:
+      description: Missing or invalid bearer token.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+  schemas:
+
+    # ------------------------------------------------------------------
+    # Shared request/response
+    # ------------------------------------------------------------------
+    AttendanceRecord:
+      type: object
+      properties:
+        employeeNo:
+          type: string
+        name:
+          type: string
+        cardNo:
+          type: string
+        eventTime:
+          type: string
+        verifyMode:
+          type: string
+        attendanceStatus:
+          type: string
+        userType:
+          type: string
+        serialNumber:
+          type: string
+        cloudId:
+          type: string
+        image:
+          type: string
+          nullable: true
+        workCode:
+          type: string
+
+    SetUserRequest:
+      type: object
+      required: [employeeNo, name]
+      properties:
+        employeeNo:
+          type: string
+          description: User ID on the device.
+        name:
+          type: string
+          description: User name.
+        userType:
+          type: string
+          enum: [normal, admin, visitor, user, operator, manager, supervisor]
+          description: |
+            Standard brands (ZKTeco, Vivo, Vida): normal, admin, visitor
+            Revo: all values including user, operator, manager, supervisor
+        password:
+          type: string
+          description: User password (plaintext).
+        fingerprints:
+          type: array
+          items:
+            $ref: '#/components/schemas/Fingerprint'
+        faceData:
+          type: string
+          description: Base64 face data.
+        cards:
+          type: array
+          items:
+            $ref: '#/components/schemas/Card'
+        veins:
+          type: array
+          items:
+            type: string
+        valid:
+          $ref: '#/components/schemas/ValidPeriod'
+          nullable: true
+
+    AckResponse:
+      type: object
+      required: [referenceId, status, deviceStatus, message, webhookUrls]
+      properties:
+        referenceId:
+          type: string
+        status:
+          type: string
+          enum: [queued]
+        deviceStatus:
+          type: string
+          enum: [registered, unauthenticated, connected, offline]
+        message:
+          type: string
+        webhookUrls:
+          type: array
+          items:
+            type: string
+            format: uri
+          description: All URLs the callback will be sent to (customer webhook + any X-Webhook-URL extras).
+
+    ErrorResponse:
+      type: object
+      required: [success, error]
+      properties:
+        success:
+          type: boolean
+          enum: [false]
+        error:
+          $ref: '#/components/schemas/Error'
+
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          enum:
+            - ERR_DEVICE_NOT_FOUND
+            - ERR_DEVICE_OFFLINE
+            - ERR_DEVICE_TIMEOUT
+            - ERR_DEVICE_BUSY
+            - ERR_INVALID_PARAMS
+            - ERR_DATE_RANGE
+            - ERR_UNSUPPORTED
+            - ERR_INTERNAL
+            - ERR_UNAUTHORIZED
+        message:
+          type: string
+
+    WebhookFailed:
+      type: object
+      required: [referenceId, status, commandType, error]
+      properties:
+        referenceId:
+          type: string
+        status:
+          type: string
+          enum: [failed]
+        commandType:
+          type: string
+          description: >
+            The command type that was executed (e.g. "getUser", "setUser",
+            "setTime", "reboot", etc.).
+        error:
+          $ref: '#/components/schemas/Error'
+
+    OperationResult:
+      type: object
+      required: [success]
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+
+    # ------------------------------------------------------------------
+    # Webhook URL customization
+    # ------------------------------------------------------------------
+    SetWebhookRequest:
+      type: object
+      required: [url]
+      properties:
+        url:
+          type: string
+          format: uri
+          description: Webhook URL for this device.
+
+    SetWebhookResponse:
+      type: object
+      required: [referenceId, status, message]
+      properties:
+        referenceId:
+          type: string
+        status:
+          type: string
+          enum: [ok]
+        message:
+          type: string
+
+    TestWebhookResponse:
+      type: object
+      required: [reachable, responseTimeMs]
+      properties:
+        reachable:
+          type: boolean
+          description: Whether the webhook URL returned a success status (2xx or 3xx).
+        statusCode:
+          type: integer
+          description: HTTP status code from the webhook URL.
+        responseTimeMs:
+          type: integer
+          description: Round-trip time in milliseconds.
+        error:
+          type: string
+          description: Error message if the URL is unreachable.
+
+    # ------------------------------------------------------------------
+    # Device data
+    # ------------------------------------------------------------------
+    DeviceInfoData:
+      type: object
+      required: [cloudId, brand, serial, lastActivity, status, capabilities]
+      properties:
+        cloudId:
+          type: string
+        brand:
+          type: string
+        serial:
+          type: string
+        lastActivity:
+          type: string
+        status:
+          type: string
+          enum: [registered, unauthenticated, connected, offline]
+        capabilities:
+          $ref: '#/components/schemas/DeviceCapabilities'
+
+    DeviceActivityResponse:
+      type: object
+      required: [status, lastSeen]
+      properties:
+        status:
+          type: string
+          enum: [connected, registered, unauthenticated, offline]
+          description: Current connectivity status of the device.
+        lastSeen:
+          type: string
+          description: RFC 3339 timestamp of last activity. Empty string if offline.
+
+    DeviceCapabilities:
+      type: object
+      properties:
+        setTime:
+          type: boolean
+        reboot:
+          type: boolean
+        openDoor:
+          type: boolean
+        closeDoor:
+          type: boolean
+        doorStatus:
+          type: boolean
+        getUserInfo:
+          type: boolean
+        setUserInfo:
+          type: boolean
+        deleteUser:
+          type: boolean
+        getAllUsers:
+          type: boolean
+        getAllUserIDs:
+          type: boolean
+        getUserFace:
+          type: boolean
+        setUserFace:
+          type: boolean
+        deleteUserFace:
+          type: boolean
+        getUserCard:
+          type: boolean
+        setUserCard:
+          type: boolean
+        deleteUserCard:
+          type: boolean
+        getUserFinger:
+          type: boolean
+        getUserAllFinger:
+          type: boolean
+        setUserFinger:
+          type: boolean
+        setUserAllFinger:
+          type: boolean
+        deleteUserFinger:
+          type: boolean
+        deleteUserAllFinger:
+          type: boolean
+        getUserPassword:
+          type: boolean
+        setUserPassword:
+          type: boolean
+        captureUserFinger:
+          type: boolean
+        captureUserCard:
+          type: boolean
+        enrollUserFinger:
+          type: boolean
+        enrollUserFace:
+          type: boolean
+        enrollUserVein:
+          type: boolean
+        getAttLog:
+          type: boolean
+        getTimezone:
+          type: boolean
+        setTimezone:
+          type: boolean
+        timezoneLock:
+          type: boolean
+        getUserFullInfo:
+          type: boolean
+        setUserFullInfo:
+          type: boolean
+        deleteFullUserInfo:
+          type: boolean
+        batchDeleteFullUserInfo:
+          type: boolean
+
+    # ------------------------------------------------------------------
+    # User data
+    # ------------------------------------------------------------------
+    UserInfo:
+      type: object
+      required: [employeeNo, name, userType]
+      properties:
+        employeeNo:
+          type: string
+        name:
+          type: string
+        userType:
+          type: string
+        valid:
+          $ref: '#/components/schemas/ValidPeriod'
+          nullable: true
+        password:
+          type: string
+
+    UserDetail:
+      type: object
+      required: [employeeNo, name, userType]
+      properties:
+        employeeNo:
+          type: string
+        name:
+          type: string
+        userType:
+          type: string
+        fingerprints:
+          type: array
+          items:
+            $ref: '#/components/schemas/Fingerprint'
+        faceData:
+          type: string
+        cards:
+          type: array
+          items:
+            $ref: '#/components/schemas/Card'
+        password:
+          type: string
+        veins:
+          type: array
+          items:
+            type: string
+        valid:
+          $ref: '#/components/schemas/ValidPeriod'
+          nullable: true
+
+    GetAllUserIdsResult:
+      type: object
+      required: [total, pin_arr]
+      properties:
+        total:
+          type: integer
+          description: Total number of user IDs.
+        pin_arr:
+          type: array
+          description: List of user IDs/PINs.
+          items:
+            type: string
+
+    Fingerprint:
+      type: object
+      required: [fingerNo]
+      properties:
+        fingerNo:
+          type: integer
+          minimum: 0
+          maximum: 10
+        fingerData:
+          type: string
+
+    Card:
+      type: object
+      required: [cardNo]
+      properties:
+        cardNo:
+          type: string
+        cardType:
+          type: string
+
+    # ------------------------------------------------------------------
+    # Password credential schemas
+    # ------------------------------------------------------------------
+    GetUserPasswordResponse:
+      type: object
+      required: [employeeNo, password]
+      properties:
+        employeeNo:
+          type: string
+          description: Employee number.
+        password:
+          type: string
+          description: User password (plaintext).
+
+    SetUserPasswordRequest:
+      type: object
+      required: [password]
+      properties:
+        password:
+          type: string
+          description: New password (plaintext).
+
+    # ------------------------------------------------------------------
+    # Card credential schemas
+    # ------------------------------------------------------------------
+    GetUserCardResponse:
+      type: object
+      required: [employeeNo, cards]
+      properties:
+        employeeNo:
+          type: string
+          description: Employee number.
+        cards:
+          type: array
+          items:
+            $ref: '#/components/schemas/Card'
+
+    SetUserCardRequest:
+      type: object
+      required: [cardNo]
+      properties:
+        cardNo:
+          type: string
+          description: Card number.
+        cardType:
+          type: string
+          enum: [normalCard, hijackCard]
+          description: "Card type (default: normalCard)."
+
+    # ------------------------------------------------------------------
+    # Finger credential schemas
+    # ------------------------------------------------------------------
+    GetUserFingerResponse:
+      type: object
+      required: [employeeNo, fingerprints]
+      properties:
+        employeeNo:
+          type: string
+          description: Employee number.
+        fingerprints:
+          type: array
+          items:
+            $ref: '#/components/schemas/Fingerprint'
+
+    SetUserFingerRequest:
+      type: object
+      required: [fingerData]
+      properties:
+        fingerData:
+          type: string
+          description: Base64-encoded fingerprint template.
+
+    SetUserAllFingerRequest:
+      type: object
+      required: [fingerprints]
+      properties:
+        fingerprints:
+          type: array
+          items:
+            $ref: '#/components/schemas/Fingerprint'
+
+    # ------------------------------------------------------------------
+    # Face credential schemas
+    # ------------------------------------------------------------------
+    GetUserFaceResponse:
+      type: object
+      required: [employeeNo, hasFace]
+      properties:
+        employeeNo:
+          type: string
+          description: Employee number.
+        hasFace:
+          type: boolean
+          description: Whether the user has registered face.
+        faceData:
+          type: string
+          description: Base64-encoded face image (if available).
+
+    SetUserFaceRequest:
+      type: object
+      required: [faceData]
+      properties:
+        faceData:
+          type: string
+          description: Base64-encoded face image or URL to the face image.
+
+    # ------------------------------------------------------------------
+    # Enrollment schemas
+    # ------------------------------------------------------------------
+    EnrollFingerRequest:
+      type: object
+      required: [employeeNo, fingerNo]
+      properties:
+        employeeNo:
+          type: string
+          description: Employee number.
+        fingerNo:
+          type: integer
+          minimum: 1
+          maximum: 10
+          description: Fingerprint slot number (1-10).
+
+    EnrollFaceRequest:
+      type: object
+      required: [employeeNo]
+      properties:
+        employeeNo:
+          type: string
+          description: Employee number.
+
+    EnrollVeinRequest:
+      type: object
+      required: [employeeNo]
+      properties:
+        employeeNo:
+          type: string
+          description: Employee number.
+
+    EnrollResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          enum: [finger_enroll_started, face_enroll_started, vein_enroll_started]
+
+    ValidPeriod:
+      type: object
+      properties:
+        enable:
+          type: boolean
+        beginTime:
+          type: string
+          description: ISO 8601 datetime (YYYY-MM-DDTHH:MM:SS).
+        endTime:
+          type: string
+          description: ISO 8601 datetime (YYYY-MM-DDTHH:MM:SS).
+
+    # ------------------------------------------------------------------
+    # Valid date data
+    # ------------------------------------------------------------------
+    SetUserValidDateRequest:
+      type: object
+      required: [employeeNo, beginDate, endDate, weekTimeZone]
+      properties:
+        employeeNo:
+          type: string
+          description: Employee number.
+        beginDate:
+          type: string
+          format: date
+          description: Start date (YYYY-MM-DD).
+        endDate:
+          type: string
+          format: date
+          description: End date (YYYY-MM-DD).
+        weekTimeZone:
+          type: array
+          items:
+            type: integer
+            enum: [0, 1]
+          minItems: 7
+          maxItems: 7
+          description: 7 values (Mon-Sun), 1=active, 0=inactive.
+
+    ValidDateData:
+      type: object
+      properties:
+        employeeNo:
+          type: string
+        beginDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+        weekTimeZone:
+          type: array
+          items:
+            type: integer
+
+    # ------------------------------------------------------------------
+    # Attendance data
+    # ------------------------------------------------------------------
+    AttendanceData:
+      type: object
+      required: [records, total, page, limit, hasMore]
+      properties:
+        records:
+          type: array
+          items:
+            $ref: '#/components/schemas/AttendanceRecord'
+        total:
+          type: integer
+        page:
+          type: integer
+        limit:
+          type: integer
+        hasMore:
+          type: boolean
+        lastSyncedAt:
+          type: string
+          nullable: true
+
+    AttendancePushPayload:
+      type: object
+      required:
+        - event
+        - cloudId
+        - employeeNo
+        - name
+        - cardNo
+        - verifyMode
+        - attendanceStatus
+        - eventTime
+        - userType
+        - picture
+      properties:
+        event:
+          type: string
+          enum: [attendance]
+        cloudId:
+          type: string
+        employeeNo:
+          type: string
+        name:
+          type: string
+        cardNo:
+          type: string
+        verifyMode:
+          type: string
+        attendanceStatus:
+          type: string
+        eventTime:
+          type: string
+        userType:
+          type: string
+        picture:
+          type: string
+        workCode:
+          type: string
+
+    VerificationFailedPushPayload:
+      type: object
+      required:
+        - event
+        - cloudId
+        - eventTime
+        - reason
+      properties:
+        event:
+          type: string
+          enum: [verificationFailed]
+        cloudId:
+          type: string
+        eventTime:
+          type: string
+          description: RFC 3339 timestamp.
+        employeeNo:
+          type: string
+        name:
+          type: string
+        cardNo:
+          type: string
+        verifyMode:
+          type: string
+          description: "face, finger, card, password, or empty if unknown."
+        reason:
+          type: string
+          description: Human-readable rejection reason.
+        userType:
+          type: string
+
+    DoorEventPushPayload:
+      type: object
+      required:
+        - event
+        - cloudId
+        - eventTime
+        - doorNo
+        - status
+      properties:
+        event:
+          type: string
+          enum: [doorOpen, doorClose, doorAlarm]
+        cloudId:
+          type: string
+        eventTime:
+          type: string
+          description: RFC 3339 timestamp.
+        doorNo:
+          type: integer
+        status:
+          type: string
+          description: "open, closed, forcedOpen, notClosed."
+
+    DoorbellPushPayload:
+      type: object
+      required:
+        - event
+        - cloudId
+        - eventTime
+        - doorNo
+      properties:
+        event:
+          type: string
+          enum: [doorbell]
+        cloudId:
+          type: string
+        eventTime:
+          type: string
+          description: RFC 3339 timestamp.
+        doorNo:
+          type: integer
+
+    TamperPushPayload:
+      type: object
+      required:
+        - event
+        - cloudId
+        - eventTime
+        - subEventType
+        - description
+      properties:
+        event:
+          type: string
+          enum: [tamper]
+        cloudId:
+          type: string
+        eventTime:
+          type: string
+          description: RFC 3339 timestamp.
+        subEventType:
+          type: integer
+        description:
+          type: string
+
+    DeviceEventPushPayload:
+      type: object
+      required:
+        - event
+        - cloudId
+        - eventTime
+        - majorEventType
+        - subEventType
+        - description
+      properties:
+        event:
+          type: string
+          enum: [alarm, exception, operation]
+        cloudId:
+          type: string
+        eventTime:
+          type: string
+          description: RFC 3339 timestamp.
+        majorEventType:
+          type: integer
+        subEventType:
+          type: integer
+        description:
+          type: string
+
+    UserChangePushPayload:
+      type: object
+      required:
+        - event
+        - cloudId
+        - eventTime
+        - employeeNo
+        - changeType
+      properties:
+        event:
+          type: string
+          enum: [userChange]
+        cloudId:
+          type: string
+        eventTime:
+          type: string
+          description: RFC 3339 timestamp.
+        employeeNo:
+          type: string
+        changeType:
+          type: string
+          enum: [upsert, delete]
+          description: "upsert = user added/modified, delete = user removed."
+        credentials:
+          type: array
+          items:
+            type: string
+          description: "Credential types included: profile, face, finger, card, password, iris."
+        name:
+          type: string
+        cardNo:
+          type: string
+
+    # ------------------------------------------------------------------
+    # Webhook logs
+    # ------------------------------------------------------------------
+    WebhookLogsResponse:
+      type: object
+      required: [logs, total, page, limit]
+      properties:
+        logs:
+          type: array
+          items:
+            type: object
+            properties:
+              ID:
+                type: integer
+              CloudID:
+                type: string
+              ReferenceID:
+                type: string
+              CommandType:
+                type: string
+              WebhookURL:
+                type: string
+              RequestPayload:
+                type: string
+              Status:
+                type: string
+              ResponseCode:
+                type: integer
+                nullable: true
+              RawResponse:
+                type: string
+                nullable: true
+              ErrorMessage:
+                type: string
+                nullable: true
+              RetryCount:
+                type: integer
+              CreatedAt:
+                type: string
+                format: date-time
+        limit:
+          type: integer
+
+    WebhookResendResponse:
+      type: object
+      required: [status, log_id, message]
+      properties:
+        status:
+          type: string
+          enum: [queued]
+        log_id:
+          type: integer
+          description: The ID of the newly created webhook log entry.
+        message:
+          type: string
+
+    # ------------------------------------------------------------------
+    # QR Code
+    # ------------------------------------------------------------------
+    AddUserQRRequest:
+      type: object
+      required: [qrcode]
+      properties:
+        qrcode:
+          type: string
+          description: QR code value to register for the user.
+
+    QRCodeRecord:
+      type: object
+      required: [recno, userId, qrcode]
+      properties:
+        recno:
+          type: string
+          description: Record number on device.
+        userId:
+          type: string
+          description: User ID (employee number).
+        qrcode:
+          type: string
+          description: QR code value.
+
+    GetQRResponse:
+      type: object
+      required: [employeeNo, qrcode]
+      properties:
+        employeeNo:
+          type: string
+          description: Employee number.
+        qrcode:
+          type: string
+          description: QR code value.

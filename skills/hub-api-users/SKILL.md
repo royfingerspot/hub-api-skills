@@ -85,7 +85,7 @@ Sets user profile and all credentials in a single command. Creates the user if t
 | `name` | string | **yes** | User name |
 | `userType` | string | no | `normal`, `admin`, `visitor` (Revo: also `user`, `operator`, `manager`, `supervisor`) |
 | `password` | string | no | Plaintext password |
-| `fingerprints` | array | no | `[{ fingerNo, template }]` |
+| `fingerprints` | array | no | `[{ fingerNo, fingerData }]` |
 | `cards` | array | no | `[{ cardNo }]` |
 | `faceData` | string | no | Base64 face data |
 | `veins` | array | no | Array of base64 vein templates |
@@ -101,7 +101,7 @@ Sets user profile and all credentials in a single command. Creates the user if t
   "userType": "admin",
   "password": "123456",
   "fingerprints": [
-    { "fingerNo": 1, "template": "base64..." }
+    { "fingerNo": 1, "fingerData": "base64..." }
   ],
   "cards": [
     { "cardNo": "12345678" }

@@ -70,6 +70,5 @@ curl -H "Authorization: Bearer $TOKEN" \
 
 ## Notes
 
-- Date range should not exceed 7 days for optimal performance.
 - `verifyMode` values: `fingerprint`, `password`, `card`, `face`, `vein`
 - `attendanceStatus` values: `check_in`, `check_out`

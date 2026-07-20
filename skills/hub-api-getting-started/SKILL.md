@@ -72,8 +72,6 @@ These return data directly (no webhook):
 - `GET /v1/{cloud_id}` — device info
 - `GET /v1/{cloud_id}/activity` — device connectivity status
 - `GET /v1/{cloud_id}/attendance` — attendance logs
-- `GET /v1/{cloud_id}/webhook-logs` — webhook delivery logs
-- `POST /v1/{cloud_id}/webhook-logs/{id}/resend` — resend webhook
 - `PUT /v1/{cloud_id}/webhook` — set webhook URL
 
 ## Required Headers
@@ -154,7 +152,7 @@ Failed webhook deliveries are retried with **exponential backoff**:
 | 4 | 8s |
 | 5 | 16s |
 
-After 5 failed attempts, the error is logged and the payload is **not retried further**. There is no dead-letter queue. Use `GET /v1/{cloud_id}/webhook-logs` to detect failed deliveries.
+After 5 failed attempts, the error is logged and the payload is **not retried further**. There is no dead-letter queue or manual retry mechanism.
 
 ## Webhook Signature Verification
 
@@ -186,4 +184,4 @@ Supported brands: `vivo`, `vida`, `revo`, `vega`, `zkteco`
 | `hub-api-attendance` | Attendance log queries |
 | `hub-api-device` | Device info, activity, time, reboot, timezone, valid date |
 | `hub-api-door` | Door open/close/status |
-| `hub-api-webhook` | Webhook config, signature verification, logs, realtime events |
+| `hub-api-webhook` | Webhook config, signature verification, realtime events |

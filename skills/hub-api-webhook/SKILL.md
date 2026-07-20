@@ -1,9 +1,9 @@
 ---
 name: hub-api-webhook
 description: >
-  Configure webhooks, verify signatures, inspect delivery logs, and handle
-  realtime events from Fingerspot devices. Use when the user asks about
-  webhook setup, signature verification, event handling, or delivery debugging.
+  Configure webhooks, verify signatures, and handle realtime events from
+  Fingerspot devices. Use when the user asks about webhook setup, signature
+  verification, or event handling.
 ---
 
 # Hub API — Webhook
@@ -137,47 +137,6 @@ func verifyWebhook(body []byte, timestamp, signature, secret string) bool {
 }
 ```
 
-## Webhook Logs
-
-### Get Webhook Logs (Sync)
-
-```
-GET /v1/{cloud_id}/webhook-logs
-```
-
-Returns webhook delivery log entries.
-
-**Query params:**
-
-| Param | Type | Required | Notes |
-|-------|------|----------|-------|
-| `startDate` | string | no | Format `YYYY-MM-DD` |
-| `endDate` | string | no | Format `YYYY-MM-DD` |
-| `status` | string | no | `pending`, `success`, or `failed` |
-| `page` | int | no | Default `1` |
-| `limit` | int | no | Default `50`, max `100` |
-
----
-
-### Resend Webhook (Sync)
-
-```
-POST /v1/{cloud_id}/webhook-logs/{id}/resend
-```
-
-Queues a new webhook delivery using the payload and URL from an existing log entry. No request body needed.
-
-**Path params:** `id` — webhook log ID
-
-**Response:**
-```json
-{
-  "status": "queued",
-  "log_id": 42,
-  "message": "Webhook resend queued"
-}
-```
-
 ## Webhook Retry Behavior
 
 Failed deliveries are retried with **exponential backoff**:
@@ -190,7 +149,7 @@ Failed deliveries are retried with **exponential backoff**:
 | 4 | 8s |
 | 5 | 16s |
 
-After 5 failed attempts, the error is logged and the payload is **not retried further**. There is no dead-letter queue. Use `GET /v1/{cloud_id}/webhook-logs` to detect and manually retry failed deliveries.
+After 5 failed attempts, the error is logged and the payload is **not retried further**. There is no dead-letter queue or manual retry mechanism.
 
 ## Realtime Events
 

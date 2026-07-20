@@ -6,16 +6,16 @@ Agent skills yang mengajarkan AI coding agent cara integrasi ke Fingerspot Hub A
 
 ```bash
 # Install semua skill sekaligus
-npx skills add GemaMagang/hub-api-skills --all
+npx skills add royfingerspot/hub-api-skills --all
 
 # Install skill tertentu saja
-npx skills add GemaMagang/hub-api-skills --skill hub-api-getting-started
+npx skills add royfingerspot/hub-api-skills --skill hub-api-getting-started
 
 # Preview skill apa aja yang tersedia sebelum install
-npx skills add GemaMagang/hub-api-skills --list
+npx skills add royfingerspot/hub-api-skills --list
 
 # Install ke agent spesifik (kalau pakai lebih dari satu)
-npx skills add GemaMagang/hub-api-skills --all -a claude-code
+npx skills add royfingerspot/hub-api-skills --all -a claude-code
 ```
 
 Setelah terinstall, tiap skill otomatis juga tersedia sebagai slash command di Claude Code (contoh: `/hub-api-webhook`), jadi kamu bisa memanggilnya langsung tanpa menunggu AI mendeteksi konteksnya sendiri. Perilaku ini spesifik untuk Claude Code — di agent lain (Codex, OpenCode, dll) skill tetap bekerja lewat auto-detect biasa.

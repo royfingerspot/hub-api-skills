@@ -38,7 +38,7 @@ tags:
 paths:
 
   # ==========================================================================
-  # 1. GET /v1/{cloud_id} â€” Device Info
+  # 1. GET /v1/{cloud_id} — Device Info
   # ==========================================================================
   /v1/{cloud_id}:
     parameters:
@@ -49,7 +49,7 @@ paths:
       tags: [Device]
       summary: Get device information
       description: >
-        Synchronous endpoint â€” returns device information directly.
+        Synchronous endpoint — returns device information directly.
       operationId: getDevice
       x-supported-brands: [vivo, vida, revo, vega, zkteco]
       responses:
@@ -69,7 +69,7 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
 
   # ==========================================================================
-  # 1.5 GET /v1/{cloud_id}/activity â€” Device Activity (sync)
+  # 1.5 GET /v1/{cloud_id}/activity — Device Activity (sync)
   # ==========================================================================
   /v1/{cloud_id}/activity:
     parameters:
@@ -78,7 +78,7 @@ paths:
       tags: [Device]
       summary: Get device connectivity status
       description: >
-        Synchronous endpoint â€” returns the device's current connectivity
+        Synchronous endpoint — returns the device's current connectivity
         status and last-seen timestamp directly. No webhook callback.
       operationId: getDeviceActivity
       x-supported-brands: [vivo, vida, revo, vega, zkteco]
@@ -99,7 +99,7 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
 
   # ==========================================================================
-  # 2. GET /v1/{cloud_id}/attendance â€” Attendance Logs
+  # 2. GET /v1/{cloud_id}/attendance — Attendance Logs
   # ==========================================================================
   /v1/{cloud_id}/attendance:
     parameters:
@@ -108,7 +108,7 @@ paths:
       tags: [Attendance]
       summary: Get attendance logs
       description: >
-        Synchronous endpoint â€” returns attendance logs directly from local database.
+        Synchronous endpoint — returns attendance logs directly from local database.
       operationId: getAttendance
       x-supported-brands: [vivo, vida, revo, vega, zkteco]
       parameters:
@@ -164,7 +164,7 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
 
   # ==========================================================================
-  # 2.5 POST /v1/{cloud_id}/sync-attendance â€” Sync Attendance from Device
+  # 2.5 POST /v1/{cloud_id}/sync-attendance — Sync Attendance from Device
   # ==========================================================================
   /v1/{cloud_id}/sync-attendance:
     parameters:
@@ -176,7 +176,7 @@ paths:
         Triggers a real-time pull of attendance logs from the physical
         device for the given date range. Logs are saved to the local database
         and automatically delivered via webhook through the existing
-        attendance pipeline. Synchronous â€” returns directly.
+        attendance pipeline. Synchronous — returns directly.
       operationId: syncAttendance
       x-supported-brands: [vivo, vida, revo, vega, zkteco]
       requestBody:
@@ -218,7 +218,7 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
 
   # ==========================================================================
-  # 3. GET /v1/{cloud_id}/users â€” Get All Users
+  # 3. GET /v1/{cloud_id}/users — Get All Users
   # ==========================================================================
   /v1/{cloud_id}/users:
     parameters:
@@ -292,7 +292,7 @@ paths:
                   description: Error (retried up to 5 times).
 
     # ========================================================================
-    # 4. POST /v1/{cloud_id}/users â€” Create/Update User
+    # 4. POST /v1/{cloud_id}/users — Create/Update User
     # ========================================================================
     post:
       tags: [Users]
@@ -368,7 +368,7 @@ paths:
                   description: Error (retried up to 5 times).
 
   # ==========================================================================
-  # 4.5 GET /v1/{cloud_id}/user-ids â€” Get All User IDs (Lightweight)
+  # 4.5 GET /v1/{cloud_id}/user-ids — Get All User IDs (Lightweight)
   # ==========================================================================
   /v1/{cloud_id}/user-ids:
     parameters:
@@ -443,7 +443,7 @@ paths:
                   description: Error (retried up to 5 times).
 
   # ==========================================================================
-  # 5. GET /v1/{cloud_id}/users/{id} â€” Get User by ID
+  # 5. GET /v1/{cloud_id}/users/{id} — Get User by ID
   # ==========================================================================
   /v1/{cloud_id}/users/{id}:
     parameters:
@@ -516,7 +516,7 @@ paths:
                   description: Error (retried up to 5 times).
 
     # ========================================================================
-    # 6. DELETE /v1/{cloud_id}/users/{id} â€” Delete User
+    # 6. DELETE /v1/{cloud_id}/users/{id} — Delete User
     # ========================================================================
     delete:
       tags: [Users]
@@ -583,7 +583,7 @@ paths:
                   description: Error (retried up to 5 times).
 
   # ==========================================================================
-  # 7. PUT /v1/{cloud_id}/time â€” Set Device Time
+  # 7. PUT /v1/{cloud_id}/time — Set Device Time
   # ==========================================================================
   /v1/{cloud_id}/time:
     parameters:
@@ -675,7 +675,7 @@ paths:
                   description: Error (retried up to 5 times).
 
   # ==========================================================================
-  # 8. POST /v1/{cloud_id}/reboot â€” Reboot Device
+  # 8. POST /v1/{cloud_id}/reboot — Reboot Device
   # ==========================================================================
   /v1/{cloud_id}/reboot:
     parameters:
@@ -751,7 +751,7 @@ paths:
                   description: Error (retried up to 5 times).
 
   # ==========================================================================
-  # 9. POST /v1/{cloud_id}/capture/finger â€” Capture Finger
+  # 9. POST /v1/{cloud_id}/capture/finger — Capture Finger
   # ==========================================================================
   /v1/{cloud_id}/capture/finger:
     parameters:
@@ -859,7 +859,7 @@ paths:
                   description: Error (retried up to 5 times).
 
   # ==========================================================================
-  # 10. POST /v1/{cloud_id}/capture/card â€” Capture Card
+  # 10. POST /v1/{cloud_id}/capture/card — Capture Card
   # ==========================================================================
   /v1/{cloud_id}/capture/card:
     parameters:
@@ -957,7 +957,7 @@ paths:
                   description: Error (retried up to 5 times).
 
   # ==========================================================================
-  # 11. GET /v1/{cloud_id}/webhook-logs â€” Webhook Logs
+  # 11. GET /v1/{cloud_id}/webhook-logs — Webhook Logs
   # ==========================================================================
   /v1/{cloud_id}/webhook-logs:
     parameters:
@@ -967,7 +967,7 @@ paths:
       tags: [Webhook Logs]
       summary: Get webhook delivery logs
       description: >
-        Synchronous endpoint â€” returns webhook delivery log entries directly.
+        Synchronous endpoint — returns webhook delivery log entries directly.
         No acknowledgement or callback webhook.
       operationId: getWebhookLogs
       x-supported-brands: [vivo, vida, revo, vega, zkteco]
@@ -1025,7 +1025,7 @@ paths:
           $ref: '#/components/responses/Unauthorized'
 
   # ==========================================================================
-  # 11.5 POST /v1/{cloud_id}/webhook-logs/{id}/resend â€” Resend Webhook
+  # 11.5 POST /v1/{cloud_id}/webhook-logs/{id}/resend — Resend Webhook
   # ==========================================================================
   /v1/{cloud_id}/webhook-logs/{id}/resend:
     parameters:
@@ -1040,7 +1040,7 @@ paths:
       tags: [Webhook Logs]
       summary: Resend a webhook
       description: >
-        Synchronous endpoint â€” queues a new webhook delivery using the
+        Synchronous endpoint — queues a new webhook delivery using the
         request payload and URL from an existing webhook log. Returns
         immediately with the new log ID. Delivery happens asynchronously.
         No request body needed.
@@ -1148,7 +1148,7 @@ paths:
                   description: Error (retried up to 5 times).
 
   # ==========================================================================
-  # 14b. GET /v1/{cloud_id}/users/{id}/password â€” Get User Password
+  # 14b. GET /v1/{cloud_id}/users/{id}/password — Get User Password
   # ==========================================================================
   /v1/{cloud_id}/users/{id}/password:
     parameters:
@@ -1290,7 +1290,7 @@ paths:
                   description: Error (retried up to 5 times).
 
   # ==========================================================================
-  # 14c. GET/PUT /v1/{cloud_id}/users/{id}/card â€” Get/Set User Card
+  # 14c. GET/PUT /v1/{cloud_id}/users/{id}/card — Get/Set User Card
   # ==========================================================================
   /v1/{cloud_id}/users/{id}/card:
     parameters:
@@ -1432,7 +1432,7 @@ paths:
                   description: Error (retried up to 5 times).
 
   # ==========================================================================
-  # 14d. QR Code Management â€” 4 base + 3 wrapper commands
+  # 14d. QR Code Management — 4 base + 3 wrapper commands
   # ==========================================================================
 
   # Base endpoint: List all QR codes on device
@@ -1658,7 +1658,7 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
 
   # ==========================================================================
-  # 14e. GET/PUT/DELETE /v1/{cloud_id}/users/{id}/finger â€” Finger (all/specific)
+  # 14e. GET/PUT/DELETE /v1/{cloud_id}/users/{id}/finger — Finger (all/specific)
   # ==========================================================================
   /v1/{cloud_id}/users/{id}/finger:
     parameters:
@@ -2073,7 +2073,7 @@ paths:
                   description: Error (retried up to 5 times).
 
   # ==========================================================================
-  # 14e. GET/PUT /v1/{cloud_id}/users/{id}/face â€” Get/Set User Face
+  # 14e. GET/PUT /v1/{cloud_id}/users/{id}/face — Get/Set User Face
   # ==========================================================================
   /v1/{cloud_id}/users/{id}/face:
     parameters:
@@ -2278,7 +2278,7 @@ paths:
                   description: Error (retried up to 5 times).
 
   # ==========================================================================
-  # 14f. POST /v1/{cloud_id}/enroll/* â€” Enrollment (async, device-initiated)
+  # 14f. POST /v1/{cloud_id}/enroll/* — Enrollment (async, device-initiated)
   # ==========================================================================
   /v1/{cloud_id}/enroll/finger:
     parameters:
@@ -2518,7 +2518,7 @@ paths:
                   description: Error (retried up to 5 times).
 
   # ==========================================================================
-  # 15. GET /v1/{cloud_id}/timezone â€” Get Timezone
+  # 15. GET /v1/{cloud_id}/timezone — Get Timezone
   # ==========================================================================
   /v1/{cloud_id}/timezone:
     parameters:
@@ -2595,7 +2595,7 @@ paths:
                   description: Error (retried up to 5 times).
 
     # ========================================================================
-    # 16. PUT /v1/{cloud_id}/timezone â€” Set Timezone
+    # 16. PUT /v1/{cloud_id}/timezone — Set Timezone
     # ========================================================================
     put:
       tags: [Timezone]
@@ -2673,7 +2673,7 @@ paths:
                   description: Error (retried up to 5 times).
 
   # ==========================================================================
-  # 17. PUT /v1/{cloud_id}/timezone/lock â€” Set Timezone Lock
+  # 17. PUT /v1/{cloud_id}/timezone/lock — Set Timezone Lock
   # ==========================================================================
   /v1/{cloud_id}/timezone/lock:
     parameters:
@@ -2759,7 +2759,7 @@ paths:
                   description: Error (retried up to 5 times).
 
   # ==========================================================================
-  # 18. POST /v1/{cloud_id}/door/open â€” Open Door
+  # 18. POST /v1/{cloud_id}/door/open — Open Door
   # ==========================================================================
   /v1/{cloud_id}/door/open:
     parameters:
@@ -2841,7 +2841,7 @@ paths:
                   description: Error (retried up to 5 times).
 
   # ==========================================================================
-  # 19. POST /v1/{cloud_id}/door/close â€” Close Door
+  # 19. POST /v1/{cloud_id}/door/close — Close Door
   # ==========================================================================
   /v1/{cloud_id}/door/close:
     parameters:
@@ -2923,7 +2923,7 @@ paths:
                   description: Error (retried up to 5 times).
 
   # ==========================================================================
-  # 20. GET /v1/{cloud_id}/door/status â€” Get Door Status
+  # 20. GET /v1/{cloud_id}/door/status — Get Door Status
   # ==========================================================================
   /v1/{cloud_id}/door/status:
     parameters:
@@ -3006,7 +3006,7 @@ paths:
                   description: Error (retried up to 5 times).
 
   # ==========================================================================
-  # 21. GET /v1/{cloud_id}/users/{id}/valid â€” Get User Valid Date
+  # 21. GET /v1/{cloud_id}/users/{id}/valid — Get User Valid Date
   # ==========================================================================
   /v1/{cloud_id}/users/{id}/valid:
     parameters:
@@ -3079,7 +3079,7 @@ paths:
                   description: Error (retried up to 5 times).
 
     # ========================================================================
-    # 22. PUT /v1/{cloud_id}/users/{id}/valid â€” Set User Valid Date
+    # 22. PUT /v1/{cloud_id}/users/{id}/valid — Set User Valid Date
     # ========================================================================
     put:
       tags: [Valid Date]
@@ -3152,7 +3152,7 @@ paths:
                   description: Error (retried up to 5 times).
 
   # ==========================================================================
-  # 23. PUT /v1/{cloud_id}/webhook â€” Set Webhook URL
+  # 23. PUT /v1/{cloud_id}/webhook — Set Webhook URL
   # ==========================================================================
   /v1/{cloud_id}/webhook:
     parameters:
@@ -3164,7 +3164,7 @@ paths:
       description: >
         Sets the default webhook URL used for async command results.
         Overrides the V2_DEFAULT_WEBHOOK_URL env var for this device.
-        This endpoint is synchronous â€” returns directly, no callback webhook.
+        This endpoint is synchronous — returns directly, no callback webhook.
       operationId: setWebhook
       x-supported-brands: [vivo, vida, revo, vega, zkteco]
       requestBody:
@@ -3190,7 +3190,7 @@ paths:
           $ref: '#/components/responses/Unauthorized'
 
   # ==========================================================================
-  # 23.5 POST /v1/{cloud_id}/webhook/test â€” Test Webhook Reachability
+  # 23.5 POST /v1/{cloud_id}/webhook/test — Test Webhook Reachability
   # ==========================================================================
   /v1/{cloud_id}/webhook/test:
     parameters:
@@ -3201,7 +3201,7 @@ paths:
       description: >
         Tests whether the device's configured webhook URL is reachable.
         Sends a GET request to the resolved URL and returns the status.
-        Synchronous â€” no acknowledgement or callback.
+        Synchronous — no acknowledgement or callback.
       operationId: testWebhook
       x-supported-brands: [vivo, vida, revo, vega, zkteco]
       responses:
@@ -3215,7 +3215,7 @@ paths:
           $ref: '#/components/responses/Unauthorized'
 
   # ==========================================================================
-  # 24. POST /v1/{cloud_id}/credentials â€” Register Device
+  # 24. POST /v1/{cloud_id}/credentials — Register Device
   # ==========================================================================
   /v1/{cloud_id}/credentials:
     parameters:
@@ -3283,14 +3283,14 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
 
     # ========================================================================
-    # 24. PUT /v1/{cloud_id}/credentials â€” Update Device Password in Registry
+    # 24. PUT /v1/{cloud_id}/credentials — Update Device Password in Registry
     # ========================================================================
     put:
       tags: [Device]
       summary: Update device registry password
       description: >
         Updates the device's login password stored in the NATS device-registry KV.
-        Synchronous â€” returns directly. Does not send a command to the device itself.
+        Synchronous — returns directly. Does not send a command to the device itself.
       operationId: updateDevicePassword
       x-supported-brands: [vivo, vida, revo, vega, zkteco]
       requestBody:
@@ -3343,7 +3343,7 @@ paths:
       summary: Remove device from registry
       description: >
         Deletes the device entry from the NATS device-registry KV.
-        Synchronous â€” returns directly.
+        Synchronous — returns directly.
       operationId: deleteDeviceFromRegistry
       x-supported-brands: [vivo, vida, revo, vega, zkteco]
       responses:
@@ -3375,7 +3375,7 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
 
   # ==========================================================================
-  # 25. GET /v1/devices â€” List Devices
+  # 25. GET /v1/devices — List Devices
   # ==========================================================================
   /v1/devices:
     get:
@@ -3412,7 +3412,7 @@ paths:
           $ref: '#/components/responses/Unauthorized'
 
     # ========================================================================
-    # 25. POST /v1/devices â€” Add Device
+    # 25. POST /v1/devices — Add Device
     # ========================================================================
     post:
       tags: [Devices]
@@ -3467,7 +3467,7 @@ paths:
           $ref: '#/components/responses/Unauthorized'
 
   # ==========================================================================
-  # 25.5 POST /v1/devices/bulk â€” Bulk Register Devices
+  # 25.5 POST /v1/devices/bulk — Bulk Register Devices
   # ==========================================================================
   /v1/devices/bulk:
     post:
@@ -3475,7 +3475,7 @@ paths:
       summary: Bulk register devices (DEV ONLY)
       description: >
         Registers multiple devices in a single request. Each device is
-        registered independently â€” failures in one do not affect others.
+        registered independently — failures in one do not affect others.
         Returns per-device results.
       operationId: bulkRegisterDevices
       x-supported-brands: [vivo, vida, revo, vega, zkteco]
@@ -3504,7 +3504,7 @@ paths:
           $ref: '#/components/responses/Unauthorized'
 
   # ==========================================================================
-  # 26. DELETE /v1/devices/{cloud_id} â€” Remove Device
+  # 26. DELETE /v1/devices/{cloud_id} — Remove Device
   # ==========================================================================
   /v1/devices/{cloud_id}:
     delete:
@@ -3539,7 +3539,7 @@ paths:
           $ref: '#/components/responses/Unauthorized'
 
 # ============================================================================
-# REALTIME WEBHOOK â€” Attendance Push
+# REALTIME WEBHOOK — Attendance Push
 # ============================================================================
 webhooks:
   realtimeAttendance:

@@ -3848,8 +3848,36 @@ components:
             - ERR_UNAUTHORIZED
         message:
           type: string
-
+    WebhookSuccess:
+      type: object
+      required: [referenceId, status, commandType]
+      properties:
+        referenceId:
+          type: string
+        status:
+          type: string
+          enum: [success]
+        commandType:
+          type: string
+          description: >
+            The command type that was executed (e.g. "getUser", "setUser",
+            "setTime", "reboot", etc.).
     WebhookFailed:
+      type: object
+      required: [referenceId, status, commandType, error]
+      properties:
+        referenceId:
+          type: string
+        status:
+          type: string
+          enum: [failed]
+        commandType:
+          type: string
+          description: >
+            The command type that was executed (e.g. "getUser", "setUser",
+            "setTime", "reboot", etc.).
+        error:
+          $ref: '#/components/schemas/Error'
       type: object
       required: [referenceId, status, commandType, error]
       properties:

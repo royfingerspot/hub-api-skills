@@ -3570,6 +3570,35 @@ webhooks:
         '4XX':
           description: Error (retried up to 5 times).
 
+  realtimeDeviceActivity:
+    post:
+      summary: Real-time device activity push
+      description: >
+        Pushed per-device when the device's connectivity status changes
+        (online ↔ offline). NOT sent on every heartbeat — only on actual
+        state transitions. Delivered as a WebhookSuccess payload with
+        commandType "device-activity" and the activity data in the data
+        field. The data schema follows the DeviceActivityEventData structure.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/WebhookSuccess'
+                - type: object
+                  properties:
+                    commandType:
+                      type: string
+                      enum: [device-activity]
+                    data:
+                      $ref: '#/components/schemas/DeviceActivityEventData'
+      responses:
+        '200':
+          description: Webhook acknowledged.
+        '4XX':
+          description: Error (retried up to 5 times).
+
   realtimeVerificationFailed:
     post:
       summary: Real-time verification failed event push
@@ -4635,6 +4664,22 @@ components:
           type: string
         workCode:
           type: string
+
+    DeviceActivityEventData:
+      type: object
+      properties:
+        serialNumber:
+          type: string
+        cloudId:
+          type: string
+        status:
+          type: string
+          enum: [online, offline, registered, unauthenticated]
+        brand:
+          type: string
+        eventTime:
+          type: string
+          format: date-time
 
     # ------------------------------------------------------------------
     # Webhook logs
